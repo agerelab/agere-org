@@ -19,11 +19,14 @@ import { AccountMenu, OrgSwitcher } from "./menus";
 import { SpacePanel, type PanelSpace } from "@/ui/space/space-panel";
 import { COOKIE, setPreferenceCookie } from "./cookies";
 import { DESK_LINKS, manageHome, orgLinksFor, pageKey, RAIL, sectionOf, type NavLink, type SectionId } from "./nav";
+import { useUnread } from "./unread";
+import { formatDateShort } from "@/i18n/format";
 
 const RAIL_ICON: Record<SectionId, React.ReactNode> = { desk: <Inbox />, space: <Layers />, manage: <Building2 /> };
 const LINK_ICON: Record<string, React.ReactNode> = { "desk/kotak-masuk": <Inbox />, "desk/tugas-saya": <ListChecks /> };
 
 export type ShellOrg = { id: string; slug: string; name: string };
+export type FocusTask = { id: string; title: string; href: string; dueDate: string; today: boolean };
 type Props = {
   org: ShellOrg;
   user: { name: string; email: string };
@@ -31,18 +34,23 @@ type Props = {
   orgs: (ShellOrg & { role: Role })[];
   /** Spaces and projects the viewer can open; null without Space access. */
   spaces: PanelSpace[] | null;
+  /** Desk badge (PRD-10 §6), other organizations with unread items, and "Fokus hari ini". */
+  unread: number;
+  unreadOrgs: string[];
+  focus: FocusTask[];
   locale: Locale;
   theme: "light" | "dark";
   panelHidden: boolean;
   children: React.ReactNode;
 };
 
-export function AppShell({ org, user, role, orgs, spaces, locale, theme: initialTheme, panelHidden, children }: Props) {
+export function AppShell({ org, user, role, orgs, spaces, unread: initialUnread, unreadOrgs, focus, locale, theme: initialTheme, panelHidden, children }: Props) {
   const t = translator(locale);
   const router = useRouter();
   const base = `/${org.slug}`;
   const path = (usePathname() ?? base).slice(base.length + 1);
   const section = sectionOf(path);
+  const unread = useUnread(base, initialUnread, path);
   const [collapsed, setCollapsed] = React.useState(panelHidden);
   const [peek, setPeek] = React.useState(false);
   // The drawer belongs to the page it was opened on, so navigating closes it.
@@ -104,10 +112,16 @@ export function AppShell({ org, user, role, orgs, spaces, locale, theme: initial
         onMouseEnter={startPeek}
         className="group flex w-14 flex-col items-center gap-1 rounded-lg py-1.5 text-[11px] font-medium leading-[14px] text-subtle hover:text-emphasis focus-ring aria-[current=page]:text-emphasis"
       >
-        <span className="grid h-[30px] w-9 place-items-center rounded-md transition-colors group-hover:bg-emphasis group-aria-[current=page]:bg-default group-aria-[current=page]:shadow-elevation-2 [&_svg]:size-[19px]">
+        <span className="relative grid h-[30px] w-9 place-items-center rounded-md transition-colors group-hover:bg-emphasis group-aria-[current=page]:bg-default group-aria-[current=page]:shadow-elevation-2 [&_svg]:size-[19px]">
           {RAIL_ICON[id]}
+          {id === "desk" && unread > 0 && (
+            <span aria-hidden className="absolute -right-1.5 -top-1 min-w-[18px] rounded-full bg-primary px-1 text-center text-[10px] font-semibold leading-[18px] text-primary-foreground tabular-nums">
+              {unread > 99 ? "99+" : unread}
+            </span>
+          )}
         </span>
         <span className="[@media(max-height:759px)]:hidden">{label}</span>
+        {id === "desk" && unread > 0 && <span className="sr-only">{t("inbox.badge", String(unread))}</span>}
       </Link>
     </SimpleTooltip>
   );
@@ -134,7 +148,7 @@ export function AppShell({ org, user, role, orgs, spaces, locale, theme: initial
         )}
       >
         <nav aria-label={t("shell.apps")} className="flex w-[68px] flex-none flex-col items-center gap-1 bg-muted py-3">
-          <OrgSwitcher org={org} orgs={orgs} t={t}>
+          <OrgSwitcher org={org} orgs={orgs} unreadOrgs={unreadOrgs} t={t}>
             <Logo variant="app-icon" height={40} title="" />
           </OrgSwitcher>
           {RAIL.map((r, i) => railLink(r.id, t(r.key), `${base}/${r.path}`, i))}
@@ -157,7 +171,7 @@ export function AppShell({ org, user, role, orgs, spaces, locale, theme: initial
             <IconButton className="md:hidden" size="sm" label={t("shell.closeMenu")} icon={<X />} onClick={() => setDrawer(false)} />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
-            <ContextPanel section={section} base={base} path={path} role={role} t={t} spaces={spaces} orgId={org.id} />
+            <ContextPanel section={section} base={base} path={path} role={role} t={t} spaces={spaces} orgId={org.id} focus={focus} locale={locale} />
           </div>
         </aside>
       </div>
@@ -190,9 +204,9 @@ export function AppShell({ org, user, role, orgs, spaces, locale, theme: initial
   );
 }
 
-type PanelProps = { section: SectionId; base: string; path: string; role: Role; t: ReturnType<typeof translator>; spaces: PanelSpace[] | null; orgId: string };
+type PanelProps = { section: SectionId; base: string; path: string; role: Role; t: ReturnType<typeof translator>; spaces: PanelSpace[] | null; orgId: string; focus: FocusTask[]; locale: Locale };
 
-function ContextPanel({ section, base, path, role, t, spaces, orgId }: PanelProps) {
+function ContextPanel({ section, base, path, role, t, spaces, orgId, focus, locale }: PanelProps) {
   const item = (l: NavLink) => (
     <Link
       key={l.path}
@@ -206,7 +220,30 @@ function ContextPanel({ section, base, path, role, t, spaces, orgId }: PanelProp
   );
   const group = (label: string) => <p className="mb-1 mt-4 px-2 text-xs font-medium text-subtle">{label}</p>;
 
-  if (section === "desk") return <nav aria-label={t("nav.deskNav")}>{DESK_LINKS.map(item)}</nav>;
+  if (section === "desk")
+    return (
+      <nav aria-label={t("nav.deskNav")}>
+        {DESK_LINKS.map(item)}
+        {/* Fokus hari ini (PRD-10 v1.3): my open tasks due today or tomorrow, at most 4. */}
+        {group(t("desk.focus"))}
+        {focus.length === 0 ? (
+          <p className="px-2 text-xs text-subtle">{t("desk.focusEmpty")}</p>
+        ) : (
+          <ul className="grid gap-0.5">
+            {focus.map((f) => (
+              <li key={f.id}>
+                <Link href={f.href} className="grid rounded-md px-2 py-1.5 text-sm hover:bg-emphasis focus-ring">
+                  <span className="truncate text-default">{f.title}</span>
+                  <span className={cn("text-xs", f.today ? "text-attention-on-surface" : "text-subtle")}>
+                    {f.today ? t("date.today") : t("date.tomorrow")} · {formatDateShort(locale, new Date(`${f.dueDate}T00:00:00Z`), "UTC")}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </nav>
+    );
   if (section === "space") return <SpacePanel t={t} base={base} path={path} spaces={spaces} orgId={orgId} />;
   return (
     <nav aria-label={t("nav.manageNav")}>

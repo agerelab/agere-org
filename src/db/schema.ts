@@ -380,3 +380,36 @@ export const orgAssets = pgTable(
   },
   (t) => [primaryKey({ columns: [t.organizationId, t.id] })],
 );
+
+// ---------- notifications (PRD-10) ----------
+export const notifications = pgTable(
+  "notifications",
+  {
+    organizationId: uuid("organization_id").notNull(),
+    id: uuid("id").notNull(),
+    recipientUserId: uuid("recipient_user_id").notNull(),
+    dedupeKey: text("dedupe_key").notNull(),
+    eventId: uuid("event_id"),
+    type: text("type").notNull(),
+    actorUserId: uuid("actor_user_id"),
+    vars: jsonb("vars").$type<Record<string, string | number>>().notNull().default({}),
+    targetUrl: text("target_url"),
+    subjectType: text("subject_type"),
+    subjectId: uuid("subject_id"),
+    forMe: boolean("for_me").notNull().default(false),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    readAt: ts("read_at"),
+    archivedAt: ts("archived_at"),
+  },
+  (t) => [primaryKey({ columns: [t.organizationId, t.id] })],
+);
+
+export const notificationEmails = pgTable(
+  "notification_emails",
+  {
+    dedupeKey: text("dedupe_key").notNull(),
+    email: text("email").notNull(),
+    sentAt: ts("sent_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.dedupeKey, t.email] })],
+);

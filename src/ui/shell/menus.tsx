@@ -20,11 +20,17 @@ import { signOutAction } from "@/app/(auth)/actions";
 type T = ReturnType<typeof translator>;
 type Org = { id: string; slug: string; name: string };
 
-export function OrgSwitcher({ org, orgs, t, children }: { org: Org; orgs: Org[]; t: T; children: React.ReactNode }) {
+/** Organizations with unread items get a dot (PRD-10 §6), in the list and on the trigger. */
+export function OrgSwitcher({ org, orgs, unreadOrgs, t, children }: { org: Org; orgs: Org[]; unreadOrgs: string[]; t: T; children: React.ReactNode }) {
+  const elsewhere = orgs.some((o) => o.id !== org.id && unreadOrgs.includes(o.id));
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger aria-label={t("shell.switchOrg", org.name)} className="mb-3 grid size-10 place-items-center rounded-lg focus-ring">
+      <DropdownMenuTrigger
+        aria-label={t("shell.switchOrg", org.name) + (elsewhere ? `, ${t("inbox.otherOrgs")}` : "")}
+        className="relative mb-3 grid size-10 place-items-center rounded-lg focus-ring"
+      >
         {children}
+        {elsewhere && <span aria-hidden className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-primary ring-2 ring-[hsl(var(--muted))]" />}
       </DropdownMenuTrigger>
       <DropdownMenuContent side="right" align="start" className="w-64">
         <DropdownMenuLabel>{t("org.switcher.title")}</DropdownMenuLabel>
@@ -33,6 +39,12 @@ export function OrgSwitcher({ org, orgs, t, children }: { org: Org; orgs: Org[];
             <Link href={`/${o.slug}`} aria-current={o.id === org.id ? "true" : undefined} className="flex items-center gap-2">
               <Avatar name={o.name} size="sm" shape="square" />
               <span className="flex-1 truncate">{o.name}</span>
+              {o.id !== org.id && unreadOrgs.includes(o.id) && (
+                <>
+                  <span aria-hidden className="size-2 rounded-full bg-primary" />
+                  <span className="sr-only">{t("inbox.hasUnread")}</span>
+                </>
+              )}
               {o.id === org.id && <Check aria-hidden className="size-4" />}
             </Link>
           </DropdownMenuItem>
