@@ -1,0 +1,13 @@
+{
+  "app.name": "agere/org",
+  "app.tagline": "One Organization. One Context. Many Agere Apps.",
+  "home.title": "agere/org is being built",
+  "home.body": "This is the release 1 foundation. Screens arrive slice by slice, following the PRD in docs/.",
+  "home.docs": "Read the PRD index",
+  "language.label": "Language",
+  "language.en": "English",
+  "language.id": "Bahasa Indonesia",
+  "date.today": "Today",
+  "date.tomorrow": "Tomorrow",
+  "date.overdueSince": "Overdue since {0}"
+}

@@ -1,0 +1,27 @@
+/* Placeholder styles until Agere DS 6.4 tokens and components land in src/ui (PLAN-01 §3, W2–W4).
+   Light theme is the default (PRD-12 v1.2 §5.3); brand is black (D19–D26). */
+:root {
+  --bg: #ffffff;
+  --fg: #0a0a0a;
+  --fg-muted: #737373;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --bg: #0a0a0a;
+  --fg: #fafafa;
+  --fg-muted: #a3a3a3;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 20px;
+}
+.placeholder { max-width: 640px; margin: 0 auto; padding: 96px 16px; }
+.placeholder h1 { font-size: 24px; line-height: 32px; font-weight: 600; margin: 0 0 8px; }
+.eyebrow { font-weight: 600; margin: 0 0 16px; }
+.muted { color: var(--fg-muted); }

@@ -1,0 +1,13 @@
+{
+  "app.name": "agere/org",
+  "app.tagline": "One Organization. One Context. Many Agere Apps.",
+  "home.title": "agere/org sedang dibangun",
+  "home.body": "Ini fondasi rilis 1. Layar hadir per slice, mengikuti PRD di docs/.",
+  "home.docs": "Baca indeks PRD",
+  "language.label": "Bahasa",
+  "language.en": "English",
+  "language.id": "Bahasa Indonesia",
+  "date.today": "Hari ini",
+  "date.tomorrow": "Besok",
+  "date.overdueSince": "Terlambat sejak {0}"
+}
