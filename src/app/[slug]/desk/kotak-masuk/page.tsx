@@ -31,8 +31,8 @@ export default async function InboxPage({ params, searchParams }: Props) {
       tab={tab}
       limit={limit}
       data={data}
-      timezone={page.org.timezone}
-      today={todayIn(page.org.timezone)}
+      timezone={page.tz}
+      today={todayIn(page.tz)}
       welcome={welcome ? { orgId: page.org.id, orgName: page.org.name } : null}
     />
   );

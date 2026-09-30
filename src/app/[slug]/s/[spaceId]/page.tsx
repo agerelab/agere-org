@@ -11,7 +11,7 @@ type Props = { params: Promise<{ slug: string; spaceId: string }> };
 
 async function load(slug: string, spaceId: string) {
   const page = await requireOrg(slug);
-  const tree = await spaceTree(page.ctx, todayIn(page.org.timezone));
+  const tree = await spaceTree(page.ctx, todayIn(page.tz));
   return { page, tree, space: tree === "NO_APP_ACCESS" ? undefined : tree.find((s) => s.id === spaceId) };
 }
 

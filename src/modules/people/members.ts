@@ -1,5 +1,6 @@
 // Members (PRD-03 §6.1, §6.3; PRD-04 §6.2 guardrails G1–G4).
 import "@/modules/registry";
+import { avatarSrc } from "@/modules/account/profile";
 import { getDb, type Tx } from "@/db/client";
 import { uuidv7 } from "@/lib/ids";
 import type { RequestContext, Role } from "@/lib/context";
@@ -21,6 +22,9 @@ export type MemberView = {
   joinedAt: Date;
   lastActiveAt: Date | null;
   teams: { id: string; name: string }[];
+  /** Jabatan (PRD-12 v1.3, D49) and the avatar URL, when set. */
+  title: string | null;
+  avatar: string | null;
 };
 
 /** Member list (PRD-03 §5). Emails only for Owners and Admins (TECH-01 §7 contract rule). */
@@ -38,6 +42,8 @@ export async function listMembers(ctx: RequestContext): Promise<MemberView[]> {
     joinedAt: r.joinedAt,
     lastActiveAt: r.lastActiveAt,
     teams: teams.filter((t) => t.userId === r.userId).map((t) => ({ id: t.teamId, name: t.name })),
+    title: r.title,
+    avatar: avatarSrc(r.userId, r.avatarUpdatedAt) ?? null,
   }));
 }
 

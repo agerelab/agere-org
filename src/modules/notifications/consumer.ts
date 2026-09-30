@@ -179,7 +179,8 @@ const USER_MAIL: Record<string, Mail> = {
 /** Sent in the recipient's language: their preference, else the organization default, else English (D45). */
 async function mail(e: StoredEvent, userId: string, m: Mail, org: Org | null) {
   const [u] = await getDb().select().from(users).where(eq(users.id, userId));
-  if (!u || u.status !== "active") return;
+  // A deletion request is confirmed to the account being deleted, before its email is scrubbed.
+  if (!u || u.scrubbedAt || (u.status !== "active" && e.type !== "identity.account.deletion_requested")) return;
   if (await repo.emailSent(getDb(), e.eventId, u.email)) return;
   const locale: Locale = u.locale ?? org?.defaultLocale ?? "en";
   const t = translator(locale);

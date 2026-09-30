@@ -2,14 +2,15 @@
 
 import { useRouter } from "next/navigation";
 import { LOCALES, translator, type Locale } from "@/i18n";
-import { COOKIE, setPreferenceCookie } from "@/ui/shell/cookies";
+import { setLanguageAction } from "@/app/pengaturan/actions";
 
 /** Footer switcher on signed-out pages (UI-01 "Bahasa & format"). Language names in their own language. */
 export function LanguageSwitcher({ locale }: { locale: Locale }) {
   const router = useRouter();
   const t = translator(locale);
-  const pick = (l: Locale) => {
-    setPreferenceCookie(COOKIE.lang, l);
+  // Saved in a cookie, and for a signed-in person as their preference too (D45).
+  const pick = async (l: Locale) => {
+    await setLanguageAction(l);
     router.refresh();
   };
   return (

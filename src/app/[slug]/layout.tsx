@@ -4,12 +4,13 @@ import { todayIn } from "@/lib/dates";
 import { myTasks, spaceTree } from "@/modules/space/queries";
 import { orgsWithUnread, unreadCount } from "@/modules/notifications";
 import { addDays } from "@/lib/dates";
+import { avatarSrc } from "@/modules/account/profile";
 import { requireOrg } from "./shell";
 
 export default async function OrgLayout({ children, params }: { children: React.ReactNode; params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const page = await requireOrg(slug);
-  const today = todayIn(page.org.timezone);
+  const today = todayIn(page.tz);
   const [locale, theme, panelHidden, tree, unread, unreadOrgs, mine] = await Promise.all([
     getLocale(),
     getTheme(),
@@ -38,7 +39,7 @@ export default async function OrgLayout({ children, params }: { children: React.
   return (
     <AppShell
       org={page.org}
-      user={page.user}
+      user={{ name: page.user.name, email: page.user.email, avatar: avatarSrc(page.user.id, page.user.avatarUpdatedAt) }}
       role={page.ctx.role}
       orgs={page.orgs}
       spaces={spaces}

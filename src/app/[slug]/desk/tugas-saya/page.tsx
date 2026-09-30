@@ -25,7 +25,7 @@ export default async function MyTasksPage({ params }: Props) {
   const { slug } = await params;
   const page = await requireOrg(slug);
   const [tasks, locale, t] = await Promise.all([myTasks(page.ctx), getLocale(), getTranslator()]);
-  const today = todayIn(page.org.timezone);
+  const today = todayIn(page.tz);
   const open = tasks.filter((x) => !x.done);
   const overdue = open.filter((x) => x.dueDate && x.dueDate < today).length;
   const rows = tasks

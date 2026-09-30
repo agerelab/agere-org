@@ -20,6 +20,8 @@ import { SpacePanel, type PanelSpace } from "@/ui/space/space-panel";
 import { COOKIE, setPreferenceCookie } from "./cookies";
 import { DESK_LINKS, manageHome, orgLinksFor, pageKey, RAIL, sectionOf, type NavLink, type SectionId } from "./nav";
 import { useUnread } from "./unread";
+import { ShortcutsDialog } from "./shortcuts-dialog";
+import { setThemeAction } from "@/app/pengaturan/actions";
 import { formatDateShort } from "@/i18n/format";
 
 const RAIL_ICON: Record<SectionId, React.ReactNode> = { desk: <Inbox />, space: <Layers />, manage: <Building2 /> };
@@ -29,7 +31,7 @@ export type ShellOrg = { id: string; slug: string; name: string };
 export type FocusTask = { id: string; title: string; href: string; dueDate: string; today: boolean };
 type Props = {
   org: ShellOrg;
-  user: { name: string; email: string };
+  user: { name: string; email: string; avatar?: string };
   role: Role;
   orgs: (ShellOrg & { role: Role })[];
   /** Spaces and projects the viewer can open; null without Space access. */
@@ -57,7 +59,17 @@ export function AppShell({ org, user, role, orgs, spaces, unread: initialUnread,
   const [drawerPath, setDrawerPath] = React.useState<string | null>(null);
   const drawer = drawerPath === path;
   const setDrawer = (open: boolean) => setDrawerPath(open ? path : null);
-  const [theme, setTheme] = React.useState(initialTheme);
+  // The rendered theme lives on <html data-theme> ("Ikuti sistem" is decided there before paint).
+  const theme = React.useSyncExternalStore(
+    (notify) => {
+      const o = new MutationObserver(notify);
+      o.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+      return () => o.disconnect();
+    },
+    () => (document.documentElement.dataset.theme === "dark" ? "dark" : "light"),
+    () => initialTheme,
+  );
+  const [shortcuts, setShortcuts] = React.useState(false);
   const peekTimer = React.useRef<number | undefined>(undefined);
 
   const toggleCollapsed = React.useCallback(() => {
@@ -70,7 +82,10 @@ export function AppShell({ org, user, role, orgs, spaces, unread: initialUnread,
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
       const typing = !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
-      if (e.ctrlKey && !e.altKey && e.key.toLowerCase() === "b" && !typing) {
+      if (e.ctrlKey && !e.altKey && e.key === "/" && !typing) {
+        e.preventDefault();
+        setShortcuts((x) => !x);
+      } else if (e.ctrlKey && !e.altKey && e.key.toLowerCase() === "b" && !typing) {
         e.preventDefault();
         toggleCollapsed();
       } else if (e.altKey && !e.ctrlKey && /^Digit[1-9]$/.test(e.code)) {
@@ -87,11 +102,11 @@ export function AppShell({ org, user, role, orgs, spaces, unread: initialUnread,
     return () => window.removeEventListener("keydown", onKey);
   }, [base, router, toggleCollapsed]);
 
+  // The header toggle picks Terang or Gelap and saves it as the preference (PRD-12 §5.3).
   const switchTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
     document.documentElement.dataset.theme = next;
-    setPreferenceCookie(COOKIE.theme, next);
+    void setThemeAction(next);
   };
 
   const startPeek = () => {
@@ -154,8 +169,8 @@ export function AppShell({ org, user, role, orgs, spaces, unread: initialUnread,
           {RAIL.map((r, i) => railLink(r.id, t(r.key), `${base}/${r.path}`, i))}
           <span className="flex-1" />
           {railLink("manage", t("nav.manage"), `${base}/${manageHome(role)}`)}
-          <AccountMenu user={user} t={t}>
-            <Avatar name={user.name} size="md" className="bg-emphasis" />
+          <AccountMenu user={user} t={t} onShortcuts={() => setShortcuts(true)}>
+            <Avatar name={user.name} src={user.avatar} size="md" className="bg-emphasis" />
           </AccountMenu>
         </nav>
 
@@ -198,6 +213,7 @@ export function AppShell({ org, user, role, orgs, spaces, unread: initialUnread,
           <main id="content" tabIndex={-1} className="min-h-0 flex-1 overflow-auto outline-none">
             {children}
           </main>
+          <ShortcutsDialog t={t} open={shortcuts} onOpenChange={setShortcuts} />
         </div>
       </div>
     </div>
