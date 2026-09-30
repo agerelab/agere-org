@@ -1,6 +1,12 @@
 # UI
 
-Agere DS 6.4 components and tokens only (UI-01, PLAN-01 `.agents/rules/ui.md`). No new visual
-component without the design system. Shared primitives from TECH-01 §8 (`RailNav`, `ContextPanel`,
-`Dialog` with dirty guard and focus return, `StateGate`, `ResponsiveTable`, …) are built here once in
-W1–W4 and reused by every screen.
+Product-level UI built **only** from Agere DS 6.4 components and tokens (`src/components/`, see its
+README) and the rules in UI-01 and `.agents/rules/ui.md`. Tailwind classes use the DS preset tokens
+(`bg-muted`, `text-subtle`, `shadow-elevation-2`, `type-heading-xl`, …); no raw colours.
+
+| Folder | What |
+|---|---|
+| `shell/` | App shell (UI-01 "Navigasi ganda"): rail, contextual panel, topbar, inset content, page frame |
+
+Shared primitives from TECH-01 §8 (`GuidePanel`, `CuList`, `Dialog` dirty guard, `StateGate`,
+`ResponsiveTable`, …) are added here as their slices land and are reused by every screen.
