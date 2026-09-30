@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { translator, type Locale } from "@/i18n";
 import type { Role } from "@/lib/context";
 import { AccountMenu, OrgSwitcher } from "./menus";
+import { SpacePanel, type PanelSpace } from "@/ui/space/space-panel";
 import { COOKIE, setPreferenceCookie } from "./cookies";
 import { DESK_LINKS, manageHome, orgLinksFor, pageKey, RAIL, sectionOf, type NavLink, type SectionId } from "./nav";
 
@@ -28,13 +29,15 @@ type Props = {
   user: { name: string; email: string };
   role: Role;
   orgs: (ShellOrg & { role: Role })[];
+  /** Spaces and projects the viewer can open; null without Space access. */
+  spaces: PanelSpace[] | null;
   locale: Locale;
   theme: "light" | "dark";
   panelHidden: boolean;
   children: React.ReactNode;
 };
 
-export function AppShell({ org, user, role, orgs, locale, theme: initialTheme, panelHidden, children }: Props) {
+export function AppShell({ org, user, role, orgs, spaces, locale, theme: initialTheme, panelHidden, children }: Props) {
   const t = translator(locale);
   const router = useRouter();
   const base = `/${org.slug}`;
@@ -154,7 +157,7 @@ export function AppShell({ org, user, role, orgs, locale, theme: initialTheme, p
             <IconButton className="md:hidden" size="sm" label={t("shell.closeMenu")} icon={<X />} onClick={() => setDrawer(false)} />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
-            <ContextPanel section={section} base={base} path={path} role={role} t={t} />
+            <ContextPanel section={section} base={base} path={path} role={role} t={t} spaces={spaces} />
           </div>
         </aside>
       </div>
@@ -187,9 +190,9 @@ export function AppShell({ org, user, role, orgs, locale, theme: initialTheme, p
   );
 }
 
-type PanelProps = { section: SectionId; base: string; path: string; role: Role; t: ReturnType<typeof translator> };
+type PanelProps = { section: SectionId; base: string; path: string; role: Role; t: ReturnType<typeof translator>; spaces: PanelSpace[] | null };
 
-function ContextPanel({ section, base, path, role, t }: PanelProps) {
+function ContextPanel({ section, base, path, role, t, spaces }: PanelProps) {
   const item = (l: NavLink) => (
     <Link
       key={l.path}
@@ -204,13 +207,7 @@ function ContextPanel({ section, base, path, role, t }: PanelProps) {
   const group = (label: string) => <p className="mb-1 mt-4 px-2 text-xs font-medium text-subtle">{label}</p>;
 
   if (section === "desk") return <nav aria-label={t("nav.deskNav")}>{DESK_LINKS.map(item)}</nav>;
-  if (section === "space")
-    return (
-      <nav aria-label={t("nav.spaceNav")}>
-        {group(t("nav.allSpaces"))}
-        <p className="mx-2 rounded-md border border-default bg-default px-3 py-2.5 text-xs text-subtle">{t("nav.noSpaces")}</p>
-      </nav>
-    );
+  if (section === "space") return <SpacePanel t={t} base={base} path={path} spaces={spaces} />;
   return (
     <nav aria-label={t("nav.manageNav")}>
       {group(t("nav.organization"))}

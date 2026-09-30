@@ -1,6 +1,6 @@
 // Drizzle mirror of db/migrations/*.sql. The SQL files are the source of truth (forward-only,
 // PLAN-01 §3); tests apply them to PGlite and exercise these definitions against them.
-import { bigserial, boolean, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigserial, boolean, date, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 const ts = (name: string) => timestamp(name, { withTimezone: true });
 
@@ -234,4 +234,126 @@ export const aclEntries = pgTable(
     level: text("level").$type<AclLevel>().notNull(),
   },
   (t) => [primaryKey({ columns: [t.organizationId, t.containerType, t.containerId, t.principalType, t.principalId] })],
+);
+
+// ---------- Space (PRD-06) ----------
+export type ColumnCategory = "todo" | "in_progress" | "done";
+export type Priority = "low" | "medium" | "high" | "urgent";
+
+export const spaces = pgTable(
+  "spaces",
+  {
+    organizationId: uuid("organization_id").notNull(),
+    id: uuid("id").notNull(),
+    name: text("name").notNull(),
+    iconKey: text("icon_key").notNull().default("layers"),
+    description: text("description").notNull().default(""),
+    createdBy: uuid("created_by").notNull(),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+    deletedAt: ts("deleted_at"),
+    version: integer("version").notNull().default(1),
+  },
+  (t) => [primaryKey({ columns: [t.organizationId, t.id] })],
+);
+
+export const projects = pgTable(
+  "projects",
+  {
+    organizationId: uuid("organization_id").notNull(),
+    id: uuid("id").notNull(),
+    spaceId: uuid("space_id").notNull(),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    access: text("access").$type<"inherit" | "restricted">().notNull().default("inherit"),
+    ownerUserId: uuid("owner_user_id"),
+    targetDate: date("target_date", { mode: "string" }),
+    status: text("status").$type<"on_track" | "at_risk" | "off_track">(),
+    statusNote: text("status_note"),
+    statusUpdatedAt: ts("status_updated_at"),
+    statusUpdatedBy: uuid("status_updated_by"),
+    archivedAt: ts("archived_at"),
+    deletedAt: ts("deleted_at"),
+    createdBy: uuid("created_by").notNull(),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+    version: integer("version").notNull().default(1),
+  },
+  (t) => [primaryKey({ columns: [t.organizationId, t.id] })],
+);
+
+export const projectFavorites = pgTable(
+  "project_favorites",
+  {
+    organizationId: uuid("organization_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    projectId: uuid("project_id").notNull(),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.organizationId, t.userId, t.projectId] })],
+);
+
+export const boards = pgTable(
+  "boards",
+  {
+    organizationId: uuid("organization_id").notNull(),
+    id: uuid("id").notNull(),
+    projectId: uuid("project_id").notNull(),
+    name: text("name").notNull(),
+    orderKey: text("order_key").notNull(),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.organizationId, t.id] })],
+);
+
+export const boardColumns = pgTable(
+  "board_columns",
+  {
+    organizationId: uuid("organization_id").notNull(),
+    id: uuid("id").notNull(),
+    boardId: uuid("board_id").notNull(),
+    name: text("name").notNull(),
+    category: text("category").$type<ColumnCategory>().notNull(),
+    orderKey: text("order_key").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.organizationId, t.id] })],
+);
+
+export const tasks = pgTable(
+  "tasks",
+  {
+    organizationId: uuid("organization_id").notNull(),
+    id: uuid("id").notNull(),
+    projectId: uuid("project_id").notNull(),
+    boardId: uuid("board_id").notNull(),
+    columnId: uuid("column_id").notNull(),
+    parentTaskId: uuid("parent_task_id"),
+    title: text("title").notNull(),
+    description: text("description").notNull().default(""),
+    assigneeType: text("assignee_type").$type<"user" | "team">(),
+    assigneeId: uuid("assignee_id"),
+    dueDate: date("due_date", { mode: "string" }),
+    priority: text("priority").$type<Priority>(),
+    orderKey: text("order_key").notNull(),
+    version: integer("version").notNull().default(1),
+    createdBy: uuid("created_by").notNull(),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+    deletedAt: ts("deleted_at"),
+    doneAt: ts("done_at"),
+  },
+  (t) => [primaryKey({ columns: [t.organizationId, t.id] })],
+);
+
+export const taskComments = pgTable(
+  "task_comments",
+  {
+    organizationId: uuid("organization_id").notNull(),
+    id: uuid("id").notNull(),
+    taskId: uuid("task_id").notNull(),
+    authorId: uuid("author_id").notNull(),
+    body: text("body").notNull(),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.organizationId, t.id] })],
 );

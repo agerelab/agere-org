@@ -4,7 +4,8 @@ import type { Db, Tx } from "@/db/client";
 
 type Q = Db | Tx;
 export type Principal = { type: PrincipalType; id: string };
-export type Container = { type: string; id: string };
+/** An ACL container. `inherit`: its own grants add to its parent's instead of replacing them. */
+export type Container = { type: string; id: string; inherit?: boolean };
 export type AclRow = typeof aclEntries.$inferSelect;
 
 export async function apps(q: Q) {
@@ -115,4 +116,10 @@ export async function activeMembers(q: Q, orgId: string) {
 export async function teamMemberRows(q: Q, orgId: string, teamIds: string[]) {
   if (!teamIds.length) return [];
   return q.select().from(teamMembers).where(and(eq(teamMembers.organizationId, orgId), inArray(teamMembers.teamId, teamIds)));
+}
+
+/** Every ACL row of an organization for the given container ids (one query for list pages). */
+export async function aclOfMany(q: Q, orgId: string, containerIds: string[]): Promise<AclRow[]> {
+  if (!containerIds.length) return [];
+  return q.select().from(aclEntries).where(and(eq(aclEntries.organizationId, orgId), inArray(aclEntries.containerId, containerIds)));
 }

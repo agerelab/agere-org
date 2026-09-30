@@ -1,5 +1,6 @@
 // Teams (PRD-03 §6.4): unique name per organization (case-insensitive), 1–50 characters; a principal
 // in app grants and ACLs; deleting a team removes its grants (I4) and unassigns its open items.
+import "@/modules/registry";
 import { getDb } from "@/db/client";
 import { uuidv7 } from "@/lib/ids";
 import type { RequestContext } from "@/lib/context";
