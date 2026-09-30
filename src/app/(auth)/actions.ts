@@ -85,3 +85,10 @@ export async function signOutAction() {
   await clearSessionCookie();
   redirect("/masuk");
 }
+
+/** Re-authentication dialog (PRD-01 §6.3): true when the password matches. */
+export async function reauthAction(password: string): Promise<boolean> {
+  const s = await currentSession();
+  if (!s) return false;
+  return identity.reauthenticate(s.sessionId, s.user.id, password);
+}

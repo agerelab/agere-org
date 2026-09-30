@@ -81,9 +81,9 @@ export function SignInForm({ locale, redirectTo, expired }: { locale: Locale; re
   );
 }
 
-export function SignUpForm({ locale }: { locale: Locale }) {
+export function SignUpForm({ locale, email }: { locale: Locale; email?: string }) {
   const t = translator(locale);
-  const [state, action, pending] = React.useActionState(signUpAction, {});
+  const [state, action, pending] = React.useActionState(signUpAction, email ? { values: { email } } : {});
   const ref = React.useRef<HTMLFormElement>(null);
   useFocusFirstError(state, ref);
   const nameErr = state.fields?.name;
