@@ -16,9 +16,12 @@ export const DESK_LINKS: NavLink[] = [
   { key: "nav.myTasks", path: "desk/tugas-saya" },
 ];
 
-/** Kelola › Organisasi (PRD-02 §6.6). Owner/Admin-only entries are hidden from members. */
+/**
+ * Kelola › Organisasi (PRD-02 §6.6). Owner/Admin-only entries are hidden from members. Umum is
+ * visible to members read-only: PRD-02 §6.6 wins over UI-01's "khusus Owner/Admin" (PLAN-01 §2).
+ */
 export const ORG_LINKS: NavLink[] = [
-  { key: "nav.general", path: "organisasi/umum", adminOnly: true },
+  { key: "nav.general", path: "organisasi/umum" },
   { key: "nav.members", path: "organisasi/anggota" },
   { key: "nav.teams", path: "organisasi/tim" },
   { key: "nav.access", path: "organisasi/akses", adminOnly: true },

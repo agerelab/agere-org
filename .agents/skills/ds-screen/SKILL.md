@@ -14,5 +14,5 @@ written directly. Done when: AC tests green, UI/i18n/layout lints green, axe 0 c
 ```
 
 Steps: open the prototype screen in `docs/prototipe/`; list DS components and new i18n keys in the
-Implementation Plan; build against the fake (`NEXT_PUBLIC_FAKE_BACKEND=1`); attach a walkthrough
+Implementation Plan; build against the module's fake in `src/contracts/fakes/` when its backend is not ready; attach a walkthrough
 (light/dark, 1440/390 px, EN/ID).

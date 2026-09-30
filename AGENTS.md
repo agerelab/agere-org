@@ -46,7 +46,8 @@ PRD-00 only. PRD changes go through a PR to `docs/` with a decision number (D-xx
 ## Commands
 
 ```bash
-npm run dev         # local app on :3000 (DEV_AUTH=1 in .env.local)
+npm run dev         # local app on :3000 (migrates the local PGlite database first)
+npm run db:seed     # demo account rina@maju.co.id / agere-demo-2026 + Maju Jaya
 npm run typecheck   # tsc --noEmit
 npm run lint        # eslint
 npm test            # vitest
