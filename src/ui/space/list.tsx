@@ -1,15 +1,18 @@
 "use client";
 
 // Daftar (PRD-06 §6.10, list pattern): one group per status with a pill, count and collapse (done
-// collapsed by default), column headers per group, 44 px rows, and "+ Tambah tugas" per group.
+// collapsed by default), column headers per group, 44 px rows, "+ Tambah tugas" per group, a checkbox
+// per row (visible on hover or when selected) for the bulk bar, and "Ganti nama" in place (US-18).
 import * as React from "react";
-import { ChevronRight, Plus } from "lucide-react";
+import { ChevronRight, Pencil, Plus } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
+import { Button, IconButton } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { Locale, translator } from "@/i18n";
 import type { BoardColumn, BoardTask } from "./board";
+import { BulkBar } from "./bulk-bar";
 import { DueTag, PriorityTag, StatusIcon } from "./task-bits";
 
 type T = ReturnType<typeof translator>;
@@ -22,30 +25,51 @@ const GRID = "grid grid-cols-[minmax(0,1fr)_180px_140px_110px] items-center gap-
 
 export function TaskListView({
   t,
+  slug,
   locale,
   today,
   columns,
   tasks,
+  assignees,
   readOnly,
   onOpen,
   onQuickAdd,
+  onRename,
 }: {
   t: T;
+  slug: string;
   locale: Locale;
   today: string;
   columns: BoardColumn[];
   tasks: BoardTask[];
+  assignees: { type: "user" | "team"; id: string; name: string }[];
   readOnly: boolean;
   onOpen: (id: string) => void;
   onQuickAdd: (columnId: string, title: string) => Promise<boolean>;
+  onRename: (task: BoardTask, title: string) => Promise<boolean>;
 }) {
   const [collapsed, setCollapsed] = React.useState<Record<string, boolean>>(() => Object.fromEntries(columns.map((c) => [c.id, c.category === "done"])));
   const [adding, setAdding] = React.useState<string | null>(null);
   const [title, setTitle] = React.useState("");
+  const [renaming, setRenaming] = React.useState<string | null>(null);
+  const [draft, setDraft] = React.useState("");
+  const [selected, setSelected] = React.useState<string[]>([]);
   const [pending, start] = React.useTransition();
+  const visible = new Set(tasks.map((x) => x.id));
+  const chosen = selected.filter((id) => visible.has(id));
+
+  const toggle = (id: string, on: boolean) => setSelected((s) => (on ? [...s, id] : s.filter((x) => x !== id)));
+
+  const saveRename = (task: BoardTask) => {
+    const next = draft.trim();
+    if (!next || next === task.title) return setRenaming(null);
+    start(async () => {
+      if (await onRename(task, next)) setRenaming(null);
+    });
+  };
 
   return (
-    <div className="grid gap-6" data-density="compact">
+    <div className="grid gap-6 pb-16" data-density="compact">
       {columns.map((c) => {
         const rows = tasks.filter((x) => x.columnId === c.id);
         const closed = collapsed[c.id];
@@ -72,7 +96,7 @@ export function TaskListView({
             {!closed && (
               <div id={groupId} className="mt-2">
                 {rows.length > 0 && (
-                  <div className={cn(GRID, "border-b border-default px-3 pb-2 pl-10 text-xs font-medium text-subtle")}>
+                  <div aria-hidden className={cn(GRID, "border-b border-default px-3 pb-2 pl-[68px] text-xs font-medium text-subtle")}>
                     <span>{t("people.col.name")}</span>
                     <span className="max-md:hidden">{t("task.assignee")}</span>
                     <span>{t("task.due")}</span>
@@ -80,33 +104,91 @@ export function TaskListView({
                   </div>
                 )}
                 <ul>
-                  {rows.map((task) => (
-                    <li key={task.id} className="border-b border-default">
-                      <button type="button" onClick={() => onOpen(task.id)} className={cn(GRID, "h-11 w-full px-3 text-left hover:bg-subtle focus-ring-inset")}>
-                        <span className="flex min-w-0 items-center gap-3">
-                          <StatusIcon category={c.category} className="shrink-0" />
-                          <span className={cn("truncate text-sm text-emphasis", c.category === "done" && "text-subtle line-through")}>{task.title}</span>
-                        </span>
-                        <span className="flex min-w-0 items-center gap-1.5 text-sm text-subtle max-md:hidden">
-                          {task.assignee ? (
-                            <>
-                              <Avatar name={task.assignee.name} size="xs" shape={task.assignee.type === "team" ? "square" : "circle"} />
-                              <span className="truncate">{task.assignee.name}</span>
-                            </>
-                          ) : (
-                            "—"
-                          )}
-                        </span>
-                        <span>{task.dueDate ? <DueTag t={t} locale={locale} due={task.dueDate} today={today} done={c.category === "done"} /> : <span className="text-subtle">—</span>}</span>
-                        <span className="max-md:hidden">{task.priority ? <PriorityTag t={t} priority={task.priority} /> : <span className="text-subtle">—</span>}</span>
-                      </button>
-                    </li>
-                  ))}
+                  {rows.map((task) => {
+                    const isSelected = chosen.includes(task.id);
+                    return (
+                      <li key={task.id} className={cn("group/row border-b border-default", isSelected && "bg-subtle")}>
+                        <div className={cn(GRID, "h-11 px-3 hover:bg-subtle")}>
+                          <span className="flex min-w-0 items-center gap-3">
+                            {!readOnly ? (
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={(v) => toggle(task.id, v === true)}
+                                aria-label={t("bulk.select", task.title)}
+                                className={cn("shrink-0 opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100", (isSelected || chosen.length > 0) && "opacity-100")}
+                              />
+                            ) : (
+                              <span aria-hidden className="size-4 shrink-0" />
+                            )}
+                            <StatusIcon category={c.category} className="shrink-0" />
+                            {renaming === task.id ? (
+                              <Input
+                                autoFocus
+                                aria-label={t("list.renameLabel", task.title)}
+                                value={draft}
+                                maxLength={200}
+                                className="h-8"
+                                onChange={(e) => setDraft(e.target.value)}
+                                onBlur={() => saveRename(task)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    saveRename(task);
+                                  }
+                                  if (e.key === "Escape") {
+                                    e.preventDefault();
+                                    setRenaming(null);
+                                  }
+                                }}
+                                disabled={pending}
+                              />
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => onOpen(task.id)}
+                                  className={cn("min-w-0 truncate rounded-sm text-left text-sm text-emphasis hover:underline focus-ring", c.category === "done" && "text-subtle line-through")}
+                                >
+                                  {task.title}
+                                </button>
+                                {!readOnly && (
+                                  <IconButton
+                                    size="xs"
+                                    variant="ghost"
+                                    label={t("list.rename", task.title)}
+                                    icon={<Pencil />}
+                                    tooltip={false}
+                                    className="shrink-0 opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100"
+                                    onClick={() => {
+                                      setDraft(task.title);
+                                      setRenaming(task.id);
+                                    }}
+                                  />
+                                )}
+                              </>
+                            )}
+                          </span>
+                          <span className="flex min-w-0 items-center gap-1.5 text-sm text-subtle max-md:hidden">
+                            {task.assignee ? (
+                              <>
+                                <Avatar name={task.assignee.name} size="xs" shape={task.assignee.type === "team" ? "square" : "circle"} />
+                                <span className="truncate">{task.assignee.name}</span>
+                              </>
+                            ) : (
+                              "—"
+                            )}
+                          </span>
+                          <span>{task.dueDate ? <DueTag t={t} locale={locale} due={task.dueDate} today={today} done={c.category === "done"} /> : <span className="text-subtle">—</span>}</span>
+                          <span className="max-md:hidden">{task.priority ? <PriorityTag t={t} priority={task.priority} /> : <span className="text-subtle">—</span>}</span>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
                 {!readOnly &&
                   (adding === c.id ? (
                     <form
-                      className="flex items-center gap-2 px-3 py-2 pl-10"
+                      className="flex items-center gap-2 px-3 py-2 pl-[68px]"
                       onSubmit={(e) => {
                         e.preventDefault();
                         if (!title.trim()) return;
@@ -120,7 +202,15 @@ export function TaskListView({
                       <Button type="button" size="sm" variant="ghost" onClick={() => setAdding(null)}>{t("common.cancel")}</Button>
                     </form>
                   ) : (
-                    <Button variant="ghost" size="sm" className="ml-7 mt-1 text-subtle" onClick={() => (setTitle(""), setAdding(c.id))}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="ml-[52px] mt-1 text-subtle"
+                      onClick={() => {
+                        setTitle("");
+                        setAdding(c.id);
+                      }}
+                    >
                       <Plus aria-hidden />
                       {t("project.addTask")}
                     </Button>
@@ -130,6 +220,7 @@ export function TaskListView({
           </section>
         );
       })}
+      {!readOnly && <BulkBar t={t} slug={slug} ids={chosen} assignees={assignees} onDone={() => setSelected([])} />}
     </div>
   );
 }

@@ -157,7 +157,7 @@ export function AppShell({ org, user, role, orgs, spaces, locale, theme: initial
             <IconButton className="md:hidden" size="sm" label={t("shell.closeMenu")} icon={<X />} onClick={() => setDrawer(false)} />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
-            <ContextPanel section={section} base={base} path={path} role={role} t={t} spaces={spaces} />
+            <ContextPanel section={section} base={base} path={path} role={role} t={t} spaces={spaces} orgId={org.id} />
           </div>
         </aside>
       </div>
@@ -190,9 +190,9 @@ export function AppShell({ org, user, role, orgs, spaces, locale, theme: initial
   );
 }
 
-type PanelProps = { section: SectionId; base: string; path: string; role: Role; t: ReturnType<typeof translator>; spaces: PanelSpace[] | null };
+type PanelProps = { section: SectionId; base: string; path: string; role: Role; t: ReturnType<typeof translator>; spaces: PanelSpace[] | null; orgId: string };
 
-function ContextPanel({ section, base, path, role, t, spaces }: PanelProps) {
+function ContextPanel({ section, base, path, role, t, spaces, orgId }: PanelProps) {
   const item = (l: NavLink) => (
     <Link
       key={l.path}
@@ -207,7 +207,7 @@ function ContextPanel({ section, base, path, role, t, spaces }: PanelProps) {
   const group = (label: string) => <p className="mb-1 mt-4 px-2 text-xs font-medium text-subtle">{label}</p>;
 
   if (section === "desk") return <nav aria-label={t("nav.deskNav")}>{DESK_LINKS.map(item)}</nav>;
-  if (section === "space") return <SpacePanel t={t} base={base} path={path} spaces={spaces} />;
+  if (section === "space") return <SpacePanel t={t} base={base} path={path} spaces={spaces} orgId={orgId} />;
   return (
     <nav aria-label={t("nav.manageNav")}>
       {group(t("nav.organization"))}

@@ -10,7 +10,7 @@ import { PageFrame } from "@/ui/shell/page-frame";
 import { SpaceDialog } from "./space-dialog";
 
 /** "Belum ada space" (PRD-06 D46) with "Space baru". */
-export function NoSpaces({ slug, locale }: { slug: string; locale: Locale }) {
+export function NoSpaces({ slug, orgId, locale }: { slug: string; orgId: string; locale: Locale }) {
   const t = translator(locale);
   const [open, setOpen] = React.useState(false);
   return (
@@ -22,7 +22,7 @@ export function NoSpaces({ slug, locale }: { slug: string; locale: Locale }) {
         description={t("space.emptyAny")}
         actions={<Button onClick={() => setOpen(true)}><Plus aria-hidden />{t("space.newSpace")}</Button>}
       />
-      {open && <SpaceDialog t={t} slug={slug} open={open} onOpenChange={setOpen} />}
+      {open && <SpaceDialog t={t} slug={slug} orgId={orgId} open={open} onOpenChange={setOpen} />}
     </>
   );
 }

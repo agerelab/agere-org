@@ -4,17 +4,17 @@ import { getDb } from "@/db/client";
 import { getLocale, getTranslator } from "@/i18n/server";
 import { todayIn } from "@/lib/dates";
 import { checkProject } from "@/modules/space/access";
-import { projectBoard } from "@/modules/space/queries";
+import { projectBoard, projectHeader, projectKpis, projectMembers } from "@/modules/space/queries";
 import * as repo from "@/modules/space/repository";
 import { NoSpaceAccess } from "@/ui/space/space-empty";
 import { requireOrg } from "../../../../shell";
-import { ProjectScreen } from "./project-screen";
+import { ProjectScreen, type ProjectView } from "./project-screen";
 
 type Props = {
   params: Promise<{ slug: string; spaceId: string; projectId: string; view: string }>;
   searchParams: Promise<{ papan?: string; task?: string }>;
 };
-const VIEWS = ["daftar", "papan"];
+const VIEWS: ProjectView[] = ["daftar", "papan", "ringkasan", "anggota"];
 const UUID = /^[0-9a-f-]{36}$/;
 
 async function load(slug: string, projectId: string) {
@@ -30,11 +30,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title: project && decision?.allow ? `${project.name} · ${page.org.name} · agere/org` : "agere/org" };
 }
 
-/** Project page (PRD-06 §6.7): header, Daftar/Papan tabs, board selector, the task modal (?task=). */
+/** Project page (PRD-06 §6.7): header, Daftar · Papan · Ringkasan · Anggota, board selector, the task modal (?task=). */
 export default async function ProjectPage({ params, searchParams }: Props) {
   const { slug, spaceId, projectId, view } = await params;
   const { papan, task } = await searchParams;
-  if (!VIEWS.includes(view)) notFound();
+  if (!VIEWS.includes(view as ProjectView)) notFound();
   const { page, project, decision } = await load(slug, projectId);
   const t = await getTranslator();
   if (!project || !decision) notFound();
@@ -43,17 +43,30 @@ export default async function ProjectPage({ params, searchParams }: Props) {
     notFound();
   }
   if (project.spaceId !== spaceId) redirect(`/${slug}/s/${project.spaceId}/${projectId}/${view}`);
-  const [data, space, locale] = await Promise.all([projectBoard(page.ctx, projectId, papan, decision.level), repo.space(getDb(), page.ctx.organizationId, spaceId), getLocale()]);
+  const today = todayIn(page.org.timezone);
+  const [data, space, locale, header, kpis, members] = await Promise.all([
+    projectBoard(page.ctx, projectId, papan, decision.level),
+    repo.space(getDb(), page.ctx.organizationId, spaceId),
+    getLocale(),
+    projectHeader(page.ctx, project),
+    view === "ringkasan" ? projectKpis(page.ctx, projectId, today) : undefined,
+    view === "anggota" ? projectMembers(page.ctx, project, today, page.org.timezone) : undefined,
+  ]);
   return (
     <ProjectScreen
       key={`${data.board.id}`}
       slug={slug}
+      orgName={page.org.name}
       locale={locale}
-      view={view as "daftar" | "papan"}
+      view={view as ProjectView}
       spaceName={space?.name ?? ""}
       data={data}
+      header={header}
+      description={project.description}
+      kpis={kpis}
+      members={members}
       override={decision.override}
-      today={todayIn(page.org.timezone)}
+      today={today}
       openTask={task && UUID.test(task) ? task : null}
     />
   );

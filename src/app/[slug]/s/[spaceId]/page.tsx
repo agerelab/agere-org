@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title: space ? `${space.name} · ${page.org.name} · agere/org` : "agere/org" };
 }
 
-/** Space page (PRD-06 §6.6): header, access line, project cards. */
+/** Space page (PRD-06 §6.6, v2.1.2): header, access line, status tabs, minimal project cards. */
 export default async function SpacePage({ params }: Props) {
   const { slug, spaceId } = await params;
   const { page, tree, space } = await load(slug, spaceId);
@@ -31,7 +31,7 @@ export default async function SpacePage({ params }: Props) {
   return (
     <>
       <RememberSpace orgId={page.org.id} spaceId={space.id} />
-      <SpaceScreen slug={slug} locale={await getLocale()} space={space} />
+      <SpaceScreen slug={slug} orgId={page.org.id} orgName={page.org.name} locale={await getLocale()} space={space} />
     </>
   );
 }
