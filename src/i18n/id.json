@@ -236,5 +236,9 @@
   "invitation.otherAccount": "Masuk dengan akun lain",
   "people.allRoles": "Semua peran",
   "people.allTeams": "Semua tim",
-  "org.pick.invited": "Anda punya undangan. Terima untuk mulai bekerja, atau buat organisasi sendiri."
+  "org.pick.invited": "Anda punya undangan. Terima untuk mulai bekerja, atau buat organisasi sendiri.",
+  "space.column.todo": "Belum dikerjakan",
+  "space.column.inProgress": "Sedang dikerjakan",
+  "space.column.done": "Selesai",
+  "space.board.default": "Papan utama"
 }

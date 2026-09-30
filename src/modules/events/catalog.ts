@@ -50,6 +50,21 @@ export const CATALOG = {
   "access.app_grant.revoked": org(true, ["notifications"]),
   "access.acl.changed": org(true),
   "access.override_used": org(true),
+  // space (PRD-06 §7); the internal id stays "space" whatever the display name
+  "space.space.created": org(false),
+  "space.space.updated": org(false),
+  "space.space.deleted": org(true),
+  "space.project.created": org(false),
+  "space.project.updated": org(false),
+  "space.project.archived": org(false),
+  "space.project.restored": org(false),
+  "space.project.moved": org(false),
+  "space.project.deleted": org(true),
+  "space.task.created": org(false),
+  "space.task.updated": org(false),
+  "space.task.deleted": org(false),
+  "space.task.assigned": org(false, ["notifications"]),
+  "space.comment.created": org(false, ["notifications"]),
 } as const satisfies Record<string, CatalogEntry>;
 
 export type EventType = keyof typeof CATALOG;

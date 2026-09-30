@@ -1,4 +1,5 @@
 // Members (PRD-03 §6.1, §6.3; PRD-04 §6.2 guardrails G1–G4).
+import "@/modules/registry";
 import { getDb, type Tx } from "@/db/client";
 import { uuidv7 } from "@/lib/ids";
 import type { RequestContext, Role } from "@/lib/context";

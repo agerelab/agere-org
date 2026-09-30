@@ -25,18 +25,34 @@ export async function appAccess(q: Q, ctx: RequestContext, appId: string): Promi
 }
 
 /**
- * Effective level on a container chain, innermost first ([project, space]): the first container
- * with its own ACL decides (a project inherits or narrows its space, I1); the level is the maximum
- * over every grant matching the user directly, through a team, or through the organization (§6.3).
+ * Effective level on a container chain, innermost first ([project, space]). A container with its own
+ * ACL decides (a restricted project narrows its space, I1), unless it is marked `inherit`, in which
+ * case its grants add to its parent's. The level is the maximum over every grant matching the user
+ * directly, through a team, or through the organization (§6.3).
  */
 export async function effectiveLevel(q: Q, ctx: Pick<RequestContext, "organizationId" | "userId">, chain: repo.Container[]): Promise<Level> {
   const ps = await repo.principalsOf(q, ctx.organizationId, ctx.userId);
+  const rows = await repo.aclOfMany(q, ctx.organizationId, chain.map((c) => c.id));
+  return levelFromRows(rows, ps, chain);
+}
+
+/** Pure part of effectiveLevel, for list pages that load every row once. */
+export function levelFromRows(rows: repo.AclRow[], ps: repo.Principal[], chain: repo.Container[]): Level {
+  const found: Level[] = [];
   for (const c of chain) {
-    const rows = await repo.aclOf(q, ctx.organizationId, c);
-    if (!rows.length) continue;
-    return maxLevel(rows.filter((r) => ps.some((p) => p.type === r.principalType && p.id === r.principalId)).map((r) => r.level));
+    const own = rows.filter((r) => r.containerType === c.type && r.containerId === c.id);
+    found.push(...own.filter((r) => ps.some((p) => p.type === r.principalType && p.id === r.principalId)).map((r) => r.level));
+    if (own.length && !c.inherit) break;
   }
-  return "none";
+  return maxLevel(found);
+}
+
+/** Levels for many chains at once (space panel, project cards), in two queries. */
+export async function levelsFor(q: Q, ctx: Pick<RequestContext, "organizationId" | "userId">, chains: repo.Container[][]): Promise<Level[]> {
+  const ps = await repo.principalsOf(q, ctx.organizationId, ctx.userId);
+  const ids = [...new Set(chains.flat().map((c) => c.id))];
+  const rows = await repo.aclOfMany(q, ctx.organizationId, ids);
+  return chains.map((chain) => levelFromRows(rows, ps, chain));
 }
 
 /**

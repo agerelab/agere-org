@@ -236,5 +236,9 @@
   "invitation.otherAccount": "Sign in with another account",
   "people.allRoles": "All roles",
   "people.allTeams": "All teams",
-  "org.pick.invited": "You have an invitation. Accept it to start working, or create your own organization."
+  "org.pick.invited": "You have an invitation. Accept it to start working, or create your own organization.",
+  "space.column.todo": "To do",
+  "space.column.inProgress": "In progress",
+  "space.column.done": "Done",
+  "space.board.default": "Main board"
 }
