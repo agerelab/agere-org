@@ -56,7 +56,7 @@ export const CATALOG = {
   "space.space.deleted": org(true),
   "space.space.restored": org(true),
   "space.project.created": org(false),
-  "space.project.updated": org(false),
+  "space.project.updated": org(false, ["notifications"]),
   "space.project.archived": org(false),
   "space.project.restored": org(false),
   "space.project.moved": org(false),

@@ -7,12 +7,14 @@ import type { RequestContext } from "@/lib/context";
 import { publish } from "@/modules/events";
 import { atLeast } from "@/modules/authz/levels";
 import type { Priority } from "@/db/schema";
-import { explicitLevel, memberCanView, type ProjectRef } from "./access";
+import { whoCanAccess } from "@/modules/authz/service";
+import { APP, explicitLevel, memberCanView, projectChain, type ProjectRef } from "./access";
+import { findMentions } from "./mentions";
 import { requireProject } from "./projects";
 import * as repo from "./repository";
 import { isDate, orgCtx, type Fail } from "./shared";
-import { teamMembers } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { teamMembers, users } from "@/db/schema";
+import { and, eq, inArray } from "drizzle-orm";
 
 export const PRIORITIES: Priority[] = ["urgent", "high", "medium", "low"];
 export type Assignee = { type: "user" | "team"; id: string } | null;
@@ -267,9 +269,14 @@ export async function addComment(ctx: RequestContext, taskId: string, body: stri
   const l = await loadForEdit(ctx, taskId);
   if (!l.ok) return l;
   const id = uuidv7();
-  const eventId = await getDb().transaction(async (tx) => {
+  const db = getDb();
+  // Mentions name people who can open the project (PRD-10 §5); the consumer checks access again.
+  const viewers = await whoCanAccess(db, ctx.organizationId, APP, projectChain(l.project));
+  const people = viewers.length ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, viewers.map((v) => v.userId))) : [];
+  const mentions = findMentions(text, people).filter((u) => u !== ctx.userId);
+  const eventId = await db.transaction(async (tx) => {
     await repo.insertComment(tx, { organizationId: ctx.organizationId, id, taskId, authorId: ctx.userId, body: text });
-    return publish(tx, orgCtx(ctx), { type: "space.comment.created", subject: subject(l.task), data: { comment_id: id } });
+    return publish(tx, orgCtx(ctx), { type: "space.comment.created", subject: subject(l.task), data: { comment_id: id, ...(mentions.length ? { mentions } : {}) } });
   });
   return { ok: true, id, eventIds: [eventId] };
 }

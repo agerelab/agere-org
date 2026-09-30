@@ -77,7 +77,7 @@ export async function changeRole(
   if (to === "owner" && Date.now() - lastAuthAt.getTime() > REAUTH_WINDOW_MS) return { ok: false, code: "REAUTH_REQUIRED" };
   const eventId = await db.transaction(async (tx) => {
     await repo.setRole(tx, ctx.organizationId, userId, to);
-    return publish(tx, orgCtx(ctx), { type: "access.role.changed", subject: { module: "access", type: "member", id: userId }, before: { role: m.role }, after: { role: to } });
+    return publish(tx, orgCtx(ctx), { type: "access.role.changed", subject: { module: "access", type: "member", id: userId }, before: { role: m.role }, after: { role: to }, data: { role: to } });
   });
   return { ok: true, eventIds: [eventId] };
 }
