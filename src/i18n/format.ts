@@ -20,6 +20,15 @@ export function formatDateShort(locale: Locale, date: Date, timeZone = DEFAULT_T
   return `${p.day} ${p.month}`;
 }
 
+/** "30 Oct 2026" / "30 Okt 2026" (project targets, Sampah). */
+export function formatDateMedium(locale: Locale, date: Date, timeZone = DEFAULT_TIME_ZONE): string {
+  const p = parts(locale, date, timeZone);
+  return `${p.day} ${p.month} ${p.year}`;
+}
+
+/** A YYYY-MM-DD calendar date (no time zone) as "30 Okt 2026". */
+export const formatIsoDate = (locale: Locale, iso: string) => formatDateMedium(locale, new Date(`${iso}T00:00:00Z`), "UTC");
+
 /** "Mon, 28 Sep 2026" / "Sen, 28 Sep 2026". */
 export function formatDateLong(locale: Locale, date: Date, timeZone = DEFAULT_TIME_ZONE): string {
   const p = parts(locale, date, timeZone);

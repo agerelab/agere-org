@@ -1,4 +1,5 @@
 import { sweep } from "@/modules/events";
+import { purgeTrash } from "@/modules/space/trash";
 
 export const dynamic = "force-dynamic";
 
@@ -7,5 +8,7 @@ export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) return new Response("Unauthorized", { status: 401 });
   const result = await sweep();
-  return Response.json(result, { headers: { "cache-control": "no-store" } });
+  // Sampah is purged once an hour (PRD-13: items older than 30 days no longer exist).
+  const purged = new Date().getUTCMinutes() === 0 ? await purgeTrash() : null;
+  return Response.json({ ...result, purged }, { headers: { "cache-control": "no-store" } });
 }

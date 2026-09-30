@@ -1,6 +1,6 @@
 // Drizzle mirror of db/migrations/*.sql. The SQL files are the source of truth (forward-only,
 // PLAN-01 §3); tests apply them to PGlite and exercise these definitions against them.
-import { bigserial, boolean, date, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigserial, boolean, customType, date, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 const ts = (name: string) => timestamp(name, { withTimezone: true });
 
@@ -252,6 +252,8 @@ export const spaces = pgTable(
     createdAt: ts("created_at").notNull().defaultNow(),
     updatedAt: ts("updated_at").notNull().defaultNow(),
     deletedAt: ts("deleted_at"),
+    deletedBy: uuid("deleted_by"),
+    iconAssetId: uuid("icon_asset_id"),
     version: integer("version").notNull().default(1),
   },
   (t) => [primaryKey({ columns: [t.organizationId, t.id] })],
@@ -274,6 +276,7 @@ export const projects = pgTable(
     statusUpdatedBy: uuid("status_updated_by"),
     archivedAt: ts("archived_at"),
     deletedAt: ts("deleted_at"),
+    deletedBy: uuid("deleted_by"),
     createdBy: uuid("created_by").notNull(),
     createdAt: ts("created_at").notNull().defaultNow(),
     updatedAt: ts("updated_at").notNull().defaultNow(),
@@ -340,6 +343,7 @@ export const tasks = pgTable(
     createdAt: ts("created_at").notNull().defaultNow(),
     updatedAt: ts("updated_at").notNull().defaultNow(),
     deletedAt: ts("deleted_at"),
+    deletedBy: uuid("deleted_by"),
     doneAt: ts("done_at"),
   },
   (t) => [primaryKey({ columns: [t.organizationId, t.id] })],
@@ -353,6 +357,25 @@ export const taskComments = pgTable(
     taskId: uuid("task_id").notNull(),
     authorId: uuid("author_id").notNull(),
     body: text("body").notNull(),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.organizationId, t.id] })],
+);
+
+// ---------- organization assets (uploaded space icons) ----------
+const bytea = customType<{ data: Uint8Array; driverData: Uint8Array }>({ dataType: () => "bytea" });
+export type AssetType = "image/png" | "image/jpeg" | "image/webp" | "image/svg+xml";
+
+export const orgAssets = pgTable(
+  "org_assets",
+  {
+    organizationId: uuid("organization_id").notNull(),
+    id: uuid("id").notNull(),
+    kind: text("kind").$type<"space_icon">().notNull(),
+    contentType: text("content_type").$type<AssetType>().notNull(),
+    bytes: bytea("bytes").notNull(),
+    size: integer("size").notNull(),
+    createdBy: uuid("created_by").notNull(),
     createdAt: ts("created_at").notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.organizationId, t.id] })],

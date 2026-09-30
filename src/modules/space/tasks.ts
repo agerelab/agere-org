@@ -169,10 +169,95 @@ export async function deleteTask(ctx: RequestContext, id: string): Promise<{ ok:
   const r = await requireProject(ctx, t.projectId, "manage");
   if (!r.ok) return r;
   const eventId = await db.transaction(async (tx) => {
-    await repo.updateTaskVersioned(tx, ctx.organizationId, id, t.version, { deletedAt: new Date() });
+    await repo.updateTaskVersioned(tx, ctx.organizationId, id, t.version, { deletedAt: new Date(), deletedBy: ctx.userId });
     return publish(tx, orgCtx(ctx), { type: "space.task.deleted", subject: subject(t) });
   });
   return { ok: true, eventIds: [eventId] };
+}
+
+export type BulkResult = { ok: true; done: number; skipped: number; eventIds: string[] } | Fail<"INVALID">;
+
+/**
+ * Bulk "Tandai selesai" (§6.10, US-18): one transaction; tasks the viewer can only view (or that
+ * are gone, archived or already done) are skipped and counted. Each goes to the end of its board's
+ * first done column.
+ */
+export async function completeTasks(ctx: RequestContext, ids: string[]): Promise<BulkResult> {
+  if (!ids.length || ids.length > 200) return { ok: false, code: "INVALID" };
+  const db = getDb();
+  const plan: { task: repo.TaskRow; column: repo.ColumnRow }[] = [];
+  let skipped = 0;
+  for (const id of new Set(ids)) {
+    const l = await loadForEdit(ctx, id);
+    if (!l.ok || l.task.doneAt) {
+      skipped++;
+      continue;
+    }
+    const cols = await repo.columnsOf(db, ctx.organizationId, l.task.boardId);
+    const done = cols.find((c) => c.category === "done");
+    if (!done || done.id === l.task.columnId) {
+      skipped++;
+      continue;
+    }
+    plan.push({ task: l.task, column: done });
+  }
+  let raced = 0;
+  const eventIds = await db.transaction(async (tx) => {
+    const out: string[] = [];
+    for (const { task, column } of plan) {
+      const rows = await repo.updateTaskVersioned(tx, ctx.organizationId, task.id, task.version, {
+        columnId: column.id,
+        orderKey: generateKeyBetween(await repo.lastKeyInColumn(tx, ctx.organizationId, column.id), null),
+        doneAt: new Date(),
+      });
+      if (!rows.length) {
+        raced++;
+        continue;
+      }
+      out.push(await publish(tx, orgCtx(ctx), { type: "space.task.updated", subject: subject(task), data: { fields: ["column"], column_id: column.id } }));
+    }
+    return out;
+  });
+  return { ok: true, done: plan.length - raced, skipped: skipped + raced, eventIds };
+}
+
+/** Bulk "Tugaskan" (§6.10): same skip rule; an assignee without access to a task's project skips it (US-12). */
+export async function assignTasks(ctx: RequestContext, ids: string[], assignee: Assignee): Promise<BulkResult> {
+  if (!ids.length || ids.length > 200) return { ok: false, code: "INVALID" };
+  const db = getDb();
+  const plan: repo.TaskRow[] = [];
+  let skipped = 0;
+  const allowed = new Map<string, boolean>();
+  for (const id of new Set(ids)) {
+    const l = await loadForEdit(ctx, id);
+    if (!l.ok) {
+      skipped++;
+      continue;
+    }
+    if (!allowed.has(l.project.id)) allowed.set(l.project.id, await assigneeAllowed(db, ctx.organizationId, l.project, assignee));
+    if (!allowed.get(l.project.id)) {
+      skipped++;
+      continue;
+    }
+    if ((l.task.assigneeId ?? null) === (assignee?.id ?? null)) continue;
+    plan.push(l.task);
+  }
+  let raced = 0;
+  const eventIds = await db.transaction(async (tx) => {
+    const out: string[] = [];
+    for (const task of plan) {
+      const rows = await repo.updateTaskVersioned(tx, ctx.organizationId, task.id, task.version, { assigneeType: assignee?.type ?? null, assigneeId: assignee?.id ?? null });
+      if (!rows.length) {
+        raced++;
+        continue;
+      }
+      out.push(await publish(tx, orgCtx(ctx), { type: "space.task.updated", subject: subject(task), data: { fields: ["assignee"] } }));
+      const a = await publishAssigned(tx, ctx, task, assignee);
+      if (a) out.push(a);
+    }
+    return out;
+  });
+  return { ok: true, done: plan.length - raced, skipped: skipped + raced, eventIds };
 }
 
 /** Comments (Should): edit on the project; sent immediately, not part of the unsaved task state. */

@@ -54,6 +54,7 @@ export const CATALOG = {
   "space.space.created": org(false),
   "space.space.updated": org(false),
   "space.space.deleted": org(true),
+  "space.space.restored": org(true),
   "space.project.created": org(false),
   "space.project.updated": org(false),
   "space.project.archived": org(false),
@@ -63,6 +64,7 @@ export const CATALOG = {
   "space.task.created": org(false),
   "space.task.updated": org(false),
   "space.task.deleted": org(false),
+  "space.task.restored": org(false),
   "space.task.assigned": org(false, ["notifications"]),
   "space.comment.created": org(false, ["notifications"]),
 } as const satisfies Record<string, CatalogEntry>;

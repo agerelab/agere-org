@@ -1,6 +1,6 @@
 // Space tables (PRD-06 §6.1). Every query names the organization.
-import { and, asc, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { boardColumns, boards, projectFavorites, projects, spaces, taskComments, tasks, teamMembers, users } from "@/db/schema";
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { aclEntries, boardColumns, boards, orgAssets, projectFavorites, projects, spaces, taskComments, tasks, teamMembers, users } from "@/db/schema";
 import type { Db, Tx } from "@/db/client";
 
 type Q = Db | Tx;
@@ -233,4 +233,102 @@ export async function commentsOf(q: Q, orgId: string, taskId: string) {
 export async function teamIdsOf(q: Q, orgId: string, userId: string) {
   const rows = await q.select({ id: teamMembers.teamId }).from(teamMembers).where(and(eq(teamMembers.organizationId, orgId), eq(teamMembers.userId, userId)));
   return rows.map((r) => r.id);
+}
+
+// ---------- Sampah (US-7, US-15; PRD-13: 30 days) ----------
+export const TRASH_DAYS = 30;
+
+export async function trashedSpaces(q: Q, orgId: string) {
+  return q.select().from(spaces).where(and(eq(spaces.organizationId, orgId), isNotNull(spaces.deletedAt), sql`${spaces.deletedAt} > now() - make_interval(days => ${TRASH_DAYS})`));
+}
+
+export async function trashedProjects(q: Q, orgId: string) {
+  return q.select().from(projects).where(and(eq(projects.organizationId, orgId), isNotNull(projects.deletedAt), sql`${projects.deletedAt} > now() - make_interval(days => ${TRASH_DAYS})`));
+}
+
+/** Deleted tasks whose project is still live (a deleted project's tasks come back with it). */
+export async function trashedTasks(q: Q, orgId: string) {
+  return q
+    .select({ task: tasks, project: projects })
+    .from(tasks)
+    .innerJoin(projects, and(eq(projects.organizationId, tasks.organizationId), eq(projects.id, tasks.projectId)))
+    .where(and(eq(tasks.organizationId, orgId), isNotNull(tasks.deletedAt), isNull(projects.deletedAt), sql`${tasks.deletedAt} > now() - make_interval(days => ${TRASH_DAYS})`));
+}
+
+export async function trashedSpace(q: Q, orgId: string, id: string) {
+  const [row] = await q.select().from(spaces).where(and(eq(spaces.organizationId, orgId), eq(spaces.id, id), isNotNull(spaces.deletedAt)));
+  return row;
+}
+
+export async function trashedProject(q: Q, orgId: string, id: string) {
+  const [row] = await q.select().from(projects).where(and(eq(projects.organizationId, orgId), eq(projects.id, id), isNotNull(projects.deletedAt)));
+  return row;
+}
+
+export async function trashedTask(q: Q, orgId: string, id: string) {
+  const [row] = await q.select().from(tasks).where(and(eq(tasks.organizationId, orgId), eq(tasks.id, id), isNotNull(tasks.deletedAt)));
+  return row;
+}
+
+export async function restoreTaskRow(q: Q, orgId: string, id: string, set: Partial<typeof tasks.$inferInsert>) {
+  await q
+    .update(tasks)
+    .set({ ...set, deletedAt: null, deletedBy: null, updatedAt: new Date(), version: sql`${tasks.version} + 1` })
+    .where(and(eq(tasks.organizationId, orgId), eq(tasks.id, id)));
+}
+
+/** Is an order key already used by a live task of the column? (a restored task must not tie). */
+export async function keyTaken(q: Q, orgId: string, columnId: string, key: string) {
+  const [row] = await q
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(and(eq(tasks.organizationId, orgId), eq(tasks.columnId, columnId), eq(tasks.orderKey, key), isNull(tasks.deletedAt)))
+    .limit(1);
+  return !!row;
+}
+
+/**
+ * Deleting a column or board must not strand tasks that sit in Sampah: they move to `to` (the board's
+ * first todo column) so a later restore lands there (US-7).
+ */
+export async function rehomeTrashed(q: Q, orgId: string, columnIds: string[], to: { boardId: string; columnId: string }) {
+  if (!columnIds.length) return;
+  await q
+    .update(tasks)
+    .set({ boardId: to.boardId, columnId: to.columnId })
+    .where(and(eq(tasks.organizationId, orgId), inArray(tasks.columnId, columnIds), isNotNull(tasks.deletedAt)));
+}
+
+/** Hard delete what has been in Sampah longer than 30 days (PRD-13 US-1). Returns counts. */
+export async function purgeExpired(q: Q) {
+  const cutoff = sql`now() - make_interval(days => ${TRASH_DAYS})`;
+  const t = await q.delete(tasks).where(and(isNotNull(tasks.deletedAt), lt(tasks.deletedAt, cutoff))).returning({ id: tasks.id });
+  const p = await q.delete(projects).where(and(isNotNull(projects.deletedAt), lt(projects.deletedAt, cutoff))).returning({ organizationId: projects.organizationId, id: projects.id });
+  for (const row of p) await q.delete(aclEntries).where(and(eq(aclEntries.organizationId, row.organizationId), eq(aclEntries.containerType, "space.project"), eq(aclEntries.containerId, row.id)));
+  const expiredSpaces = await q.select().from(spaces).where(and(isNotNull(spaces.deletedAt), lt(spaces.deletedAt, cutoff)));
+  let removedSpaces = 0;
+  for (const row of expiredSpaces) {
+    // A space in Sampah can still hold projects deleted after it; those purge first on a later run.
+    const [left] = await q.select({ n: count() }).from(projects).where(and(eq(projects.organizationId, row.organizationId), eq(projects.spaceId, row.id)));
+    if (left?.n) continue;
+    await q.delete(spaces).where(and(eq(spaces.organizationId, row.organizationId), eq(spaces.id, row.id)));
+    await q.delete(aclEntries).where(and(eq(aclEntries.organizationId, row.organizationId), eq(aclEntries.containerType, "space.space"), eq(aclEntries.containerId, row.id)));
+    if (row.iconAssetId) await q.delete(orgAssets).where(and(eq(orgAssets.organizationId, row.organizationId), eq(orgAssets.id, row.iconAssetId)));
+    removedSpaces++;
+  }
+  return { tasks: t.length, projects: p.length, spaces: removedSpaces };
+}
+
+// ---------- assets ----------
+export async function insertAsset(q: Q, row: typeof orgAssets.$inferInsert) {
+  await q.insert(orgAssets).values(row);
+}
+
+export async function asset(q: Q, orgId: string, id: string) {
+  const [row] = await q.select().from(orgAssets).where(and(eq(orgAssets.organizationId, orgId), eq(orgAssets.id, id)));
+  return row;
+}
+
+export async function deleteAsset(q: Q, orgId: string, id: string) {
+  await q.delete(orgAssets).where(and(eq(orgAssets.organizationId, orgId), eq(orgAssets.id, id)));
 }

@@ -10,7 +10,8 @@ import { orgCtx, type Fail } from "./shared";
 
 export const SPACE_ICONS = ["layers", "megaphone", "palette", "code", "briefcase", "rocket", "users", "wallet", "heart", "sparkles"] as const;
 export type SpaceIcon = (typeof SPACE_ICONS)[number];
-export type SpaceInput = { name: string; iconKey: string; description: string; access: "org" | "restricted" };
+/** `iconAssetId`: an uploaded icon (assets.ts); it wins over `iconKey`, which stays as the fallback (§10). */
+export type SpaceInput = { name: string; iconKey: string; iconAssetId?: string | null; description: string; access: "org" | "restricted" };
 
 function validate(input: SpaceInput): Fail<"INVALID"> | null {
   const name = input.name.trim();
@@ -24,10 +25,11 @@ export async function createSpace(ctx: RequestContext, input: SpaceInput): Promi
   if (bad) return bad;
   const db = getDb();
   if ((await appAccess(db, ctx, "space")) !== "ok") return { ok: false, code: "NO_APP_ACCESS" };
+  if (input.iconAssetId && !(await repo.asset(db, ctx.organizationId, input.iconAssetId))) return { ok: false, code: "INVALID" };
   if (await repo.spaceByName(db, ctx.organizationId, input.name.trim())) return { ok: false, code: "TAKEN" };
   const id = uuidv7();
   const eventIds = await db.transaction(async (tx) => {
-    await repo.insertSpace(tx, { organizationId: ctx.organizationId, id, name: input.name.trim(), iconKey: input.iconKey, description: input.description.trim(), createdBy: ctx.userId });
+    await repo.insertSpace(tx, { organizationId: ctx.organizationId, id, name: input.name.trim(), iconKey: input.iconKey, iconAssetId: input.iconAssetId ?? null, description: input.description.trim(), createdBy: ctx.userId });
     const acl = await saveAcl(tx, ctx, { type: "space.space", id }, [
       { principal: { type: "user", id: ctx.userId }, level: "manage" },
       ...(input.access === "org" ? [{ principal: { type: "org" as const, id: ctx.organizationId }, level: "edit" as const }] : []),
@@ -50,13 +52,17 @@ export async function updateSpace(ctx: RequestContext, id: string, input: Omit<S
   if (!d.allow) return { ok: false, code: d.reason === "FORBIDDEN" ? "FORBIDDEN" : "NOT_FOUND" };
   const clash = await repo.spaceByName(db, ctx.organizationId, input.name.trim());
   if (clash && clash.id !== id) return { ok: false, code: "TAKEN" };
+  const iconAssetId = input.iconAssetId === undefined ? space.iconAssetId : input.iconAssetId;
+  if (iconAssetId && iconAssetId !== space.iconAssetId && !(await repo.asset(db, ctx.organizationId, iconAssetId))) return { ok: false, code: "INVALID" };
   const eventId = await db.transaction(async (tx) => {
-    await repo.updateSpace(tx, ctx.organizationId, id, { name: input.name.trim(), iconKey: input.iconKey, description: input.description.trim() });
+    await repo.updateSpace(tx, ctx.organizationId, id, { name: input.name.trim(), iconKey: input.iconKey, iconAssetId, description: input.description.trim() });
+    // A replaced upload is no longer referenced anywhere (Q6: uploads are audited through this event).
+    if (space.iconAssetId && space.iconAssetId !== iconAssetId) await repo.deleteAsset(tx, ctx.organizationId, space.iconAssetId);
     return publish(tx, orgCtx(ctx), {
       type: "space.space.updated",
       subject: { module: "space", type: "space", id },
-      before: { name: space.name, icon_key: space.iconKey },
-      after: { name: input.name.trim(), icon_key: input.iconKey },
+      before: { name: space.name, icon_key: space.iconKey, icon_asset_id: space.iconAssetId },
+      after: { name: input.name.trim(), icon_key: input.iconKey, icon_asset_id: iconAssetId },
     });
   });
   return { ok: true, eventIds: [eventId] };
@@ -71,7 +77,7 @@ export async function deleteSpace(ctx: RequestContext, id: string): Promise<{ ok
   const n = await repo.projectCount(db, ctx.organizationId, id);
   if (n) return { ok: false, code: "NOT_EMPTY", projects: n };
   const eventId = await db.transaction(async (tx) => {
-    await repo.updateSpace(tx, ctx.organizationId, id, { deletedAt: new Date() });
+    await repo.updateSpace(tx, ctx.organizationId, id, { deletedAt: new Date(), deletedBy: ctx.userId });
     return publish(tx, orgCtx(ctx), { type: "space.space.deleted", subject: { module: "space", type: "space", id } });
   });
   return { ok: true, eventIds: [eventId] };
