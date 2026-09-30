@@ -26,6 +26,30 @@ export const CATALOG = {
   "org.organization.deletion_cancelled": org(true, ["notifications"]),
   "org.organization.suspended": org(true, ["notifications"]),
   "org.organization.reactivated": org(true, ["notifications"]),
+  // people (PRD-03)
+  "membership.invitation.created": org(true),
+  "membership.invitation.resent": org(true),
+  "membership.invitation.revoked": org(true),
+  "membership.invitation.expired": org(true),
+  "membership.member.activated": org(true, ["notifications"]),
+  "membership.member.suspended": org(true, ["notifications"]),
+  "membership.member.reactivated": org(true, ["notifications"]),
+  "membership.member.removed": org(true, ["notifications"]),
+  "membership.member.left": org(true),
+  "membership.work.reassigned": org(false, ["notifications"]),
+  "team.team.created": org(true),
+  "team.team.renamed": org(true),
+  "team.team.deleted": org(true),
+  "team.member.added": org(true),
+  "team.member.removed": org(true),
+  // access (PRD-04)
+  "access.role.changed": org(true, ["notifications"]),
+  "access.app.enabled": org(true),
+  "access.app.disabled": org(true),
+  "access.app_grant.created": org(true, ["notifications"]),
+  "access.app_grant.revoked": org(true, ["notifications"]),
+  "access.acl.changed": org(true),
+  "access.override_used": org(true),
 } as const satisfies Record<string, CatalogEntry>;
 
 export type EventType = keyof typeof CATALOG;

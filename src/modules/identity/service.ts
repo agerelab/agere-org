@@ -204,3 +204,14 @@ export async function resetPassword(token: string, password: string, meta: Reque
     return { ok: true, sessionToken: await createSession(tx, t.userId, meta), eventIds };
   });
 }
+
+// ---------- re-authentication (PRD-01 §6.3) ----------
+
+/** Confirms the password for a sensitive action and restarts the 10-minute window on this session. */
+export async function reauthenticate(sessionId: string, userId: string, password: string): Promise<boolean> {
+  const db = getDb();
+  const stored = await repo.passwordHashOf(db, userId);
+  if (!stored || !(await verifyPassword(password, stored))) return false;
+  await repo.markAuthenticated(db, sessionId);
+  return true;
+}

@@ -5,6 +5,7 @@ import { isLocale, type MessageKey } from "@/i18n";
 import { dispatchAfterResponse } from "@/modules/events";
 import { requireVerifiedUser } from "@/modules/identity/web";
 import { createOrganization, isTimezone, slugAvailable, suggestSlug } from "@/modules/org/service";
+import { acceptInvitation, acceptInvitationById } from "@/modules/people/invitations";
 
 export type OrgFormState = { error?: MessageKey; errorArg?: string; fields?: Partial<Record<"name" | "slug" | "timezone", { key: MessageKey; arg?: string }>>; values?: Record<string, string> };
 
@@ -38,4 +39,22 @@ export async function checkSlugAction(slug: string): Promise<{ available: boolea
   await requireVerifiedUser();
   if (await slugAvailable(slug)) return { available: true };
   return { available: false, suggestion: await suggestSlug(slug) };
+}
+
+/** Accept from the invitation link (PRD-03 US-2). */
+export async function acceptInvitationAction(token: string): Promise<{ error: MessageKey } | void> {
+  const { user } = await requireVerifiedUser();
+  const r = await acceptInvitation(user, token);
+  if (!r.ok) return { error: r.code === "MISMATCH" ? "invitation.mismatch" : "invitation.invalid" };
+  dispatchAfterResponse(r.eventIds);
+  redirect(`/${r.slug}`);
+}
+
+/** Accept a pending invitation listed in the organization picker. */
+export async function acceptInvitationByIdAction(organizationId: string, id: string): Promise<{ error: MessageKey } | void> {
+  const { user } = await requireVerifiedUser();
+  const r = await acceptInvitationById(user, organizationId, id);
+  if (!r.ok) return { error: "invitation.invalid" };
+  dispatchAfterResponse(r.eventIds);
+  redirect(`/${r.slug}`);
 }

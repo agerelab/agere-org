@@ -113,3 +113,7 @@ export async function lockedUntil(q: Q, key: string): Promise<Date | null> {
 export async function lock(q: Q, key: string, until: Date) {
   await q.insert(rateLimits).values({ key, lockedUntil: until }).onConflictDoUpdate({ target: rateLimits.key, set: { lockedUntil: until } });
 }
+
+export async function markAuthenticated(q: Q, sessionId: string) {
+  await q.update(sessions).set({ lastAuthAt: new Date() }).where(eq(sessions.id, sessionId));
+}
