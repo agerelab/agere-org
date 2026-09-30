@@ -22,5 +22,16 @@ export default defineConfig([
       ],
     },
   },
+  // Agere DS 6.4 is vendored as-is (src/components/README.md); it is linted and tested upstream.
+  globalIgnores([
+    "src/components/ui/**",
+    "src/components/agere-ds/**",
+    "src/brand/**",
+    "src/icons/**",
+    "src/tokens/**",
+    "src/hooks/**",
+    "src/lib/{agere-tokens,date,dev,theme,tree,utils,workspace}.ts",
+    "tailwind.preset.ts",
+  ]),
   globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts", "docs/**", "node_modules/**"]),
 ]);
