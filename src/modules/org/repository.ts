@@ -1,6 +1,6 @@
 // Organization and membership tables. Every query that reads organization data names the organization.
-import { and, asc, count, eq, inArray } from "drizzle-orm";
-import { memberships, organizations } from "@/db/schema";
+import { and, asc, count, eq, gt, inArray } from "drizzle-orm";
+import { invitations, memberships, organizations } from "@/db/schema";
 import type { Db, Tx } from "@/db/client";
 
 type Q = Db | Tx;
@@ -44,4 +44,14 @@ export async function organizationsOf(q: Q, userId: string) {
     .innerJoin(organizations, eq(organizations.id, memberships.organizationId))
     .where(and(eq(memberships.userId, userId), eq(memberships.status, "active")))
     .orderBy(asc(organizations.name));
+}
+
+/** Live invitation for this email in any organization (PRD-02 §6.2 step 5). */
+export async function hasPendingInvitation(q: Q, email: string): Promise<boolean> {
+  const [row] = await q
+    .select({ id: invitations.id })
+    .from(invitations)
+    .where(and(eq(invitations.email, email.trim().toLowerCase()), eq(invitations.status, "pending"), gt(invitations.expiresAt, new Date())))
+    .limit(1);
+  return !!row;
 }

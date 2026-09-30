@@ -145,3 +145,93 @@ export const auditLog = pgTable("audit_log", {
   requestId: text("request_id"),
   eventId: uuid("event_id").notNull(),
 });
+
+// ---------- people (PRD-03) and access (PRD-04) ----------
+export type PrincipalType = "org" | "team" | "user";
+export type AclLevel = "view" | "edit" | "manage";
+
+export const invitations = pgTable(
+  "invitations",
+  {
+    organizationId: uuid("organization_id").notNull(),
+    id: uuid("id").notNull(),
+    email: text("email").notNull(),
+    role: text("role").$type<"admin" | "member">().notNull(),
+    tokenHash: text("token_hash").notNull(),
+    status: text("status").$type<"pending" | "accepted" | "revoked">().notNull().default("pending"),
+    expiresAt: ts("expires_at").notNull(),
+    invitedBy: uuid("invited_by").notNull(),
+    acceptedBy: uuid("accepted_by"),
+    acceptedAt: ts("accepted_at"),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.organizationId, t.id] })],
+);
+
+export const teams = pgTable(
+  "teams",
+  {
+    organizationId: uuid("organization_id").notNull(),
+    id: uuid("id").notNull(),
+    name: text("name").notNull(),
+    createdBy: uuid("created_by").notNull(),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.organizationId, t.id] })],
+);
+
+export const teamMembers = pgTable(
+  "team_members",
+  {
+    organizationId: uuid("organization_id").notNull(),
+    teamId: uuid("team_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    addedAt: ts("added_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.organizationId, t.teamId, t.userId] })],
+);
+
+export const appRegistry = pgTable("app_registry", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  position: integer("position").notNull(),
+});
+
+export const orgApps = pgTable(
+  "org_apps",
+  {
+    organizationId: uuid("organization_id").notNull(),
+    appId: text("app_id").notNull(),
+    enabled: boolean("enabled").notNull(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.organizationId, t.appId] })],
+);
+
+export const appGrants = pgTable(
+  "app_grants",
+  {
+    organizationId: uuid("organization_id").notNull(),
+    appId: text("app_id").notNull(),
+    principalType: text("principal_type").$type<PrincipalType>().notNull(),
+    principalId: uuid("principal_id").notNull(),
+    createdBy: uuid("created_by"),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.organizationId, t.appId, t.principalType, t.principalId] })],
+);
+
+export const aclEntries = pgTable(
+  "acl_entries",
+  {
+    organizationId: uuid("organization_id").notNull(),
+    containerType: text("container_type").notNull(),
+    containerId: uuid("container_id").notNull(),
+    principalType: text("principal_type").$type<PrincipalType>().notNull(),
+    principalId: uuid("principal_id").notNull(),
+    level: text("level").$type<AclLevel>().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.organizationId, t.containerType, t.containerId, t.principalType, t.principalId] })],
+);

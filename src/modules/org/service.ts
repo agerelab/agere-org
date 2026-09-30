@@ -3,6 +3,7 @@ import { getDb } from "@/db/client";
 import { uuidv7 } from "@/lib/ids";
 import type { Role } from "@/lib/context";
 import { publish } from "@/modules/events";
+import { setupOrganizationApps } from "@/modules/authz/service";
 import { setLastOrganization } from "@/modules/identity/repository";
 import type { Locale } from "@/i18n";
 import * as repo from "./repository";
@@ -58,6 +59,7 @@ export async function createOrganization(userId: string, input: CreateInput, req
         createdBy: userId,
       });
       await repo.insertMembership(tx, { organizationId: id, userId, role: "owner" });
+      await setupOrganizationApps(tx, id, userId);
       await setLastOrganization(tx, userId, id);
       return publish(
         tx,
@@ -99,12 +101,14 @@ export async function listMyOrganizations(userId: string): Promise<OrgSummary[]>
 }
 
 /** Landing after sign-in (PRD-02 §6.2, steps 2–5; step 1, redirect_to, is the caller's). */
-export async function landingPath(user: { id: string; lastOrganizationId: string | null }): Promise<string> {
+export async function landingPath(user: { id: string; email?: string; lastOrganizationId: string | null }): Promise<string> {
   const orgs = await listMyOrganizations(user.id);
   const last = orgs.find((o) => o.id === user.lastOrganizationId);
   if (last) return `/${last.slug}`;
   if (orgs.length === 1) return `/${orgs[0].slug}`;
   if (orgs.length > 1) return "/pilih-organisasi";
+  // Pending invitations are offered in the picker before onboarding (step 5).
+  if (user.email && (await repo.hasPendingInvitation(getDb(), user.email))) return "/pilih-organisasi";
   return "/buat-organisasi";
 }
 

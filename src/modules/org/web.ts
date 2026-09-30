@@ -3,6 +3,7 @@ import { cache } from "react";
 import { notFound, redirect } from "next/navigation";
 import type { RequestContext } from "@/lib/context";
 import { requireVerifiedUser } from "@/modules/identity/web";
+import { touchActivity } from "@/modules/people/members";
 import { listMyOrganizations, rememberOrganization, resolveOrg, type OrgSummary } from "./service";
 
 export type OrgPage = {
@@ -23,7 +24,7 @@ export const requireOrg = cache(async (slug: string): Promise<OrgPage> => {
     if (r.code === "NOT_FOUND") notFound();
     redirect(`/tidak-tersedia?status=${r.code === "SUSPENDED" ? "suspended" : "pending_deletion"}`);
   }
-  await rememberOrganization(user.id, user.lastOrganizationId, r.org.id);
+  await Promise.all([rememberOrganization(user.id, user.lastOrganizationId, r.org.id), touchActivity(r.org.id, user.id)]);
   return {
     ctx: { requestId: crypto.randomUUID(), userId: user.id, organizationId: r.org.id, role: r.role },
     org: { id: r.org.id, slug: r.org.slug, name: r.org.name, timezone: r.org.timezone, defaultLocale: r.org.defaultLocale },
