@@ -23,7 +23,7 @@ import { useOrgAction } from "@/ui/kelola/use-org-action";
 import { leaveAction, reactivateAction, resendAction, revokeAction, suspendAction } from "../actions";
 import { InviteDialog, RemoveDialog, RoleDialog } from "./member-dialogs";
 
-export type Member = { userId: string; name: string; email: string | null; role: Role; status: "active" | "suspended"; joinedAt: string; lastActiveAt: string | null; teams: { id: string; name: string }[] };
+export type Member = { userId: string; name: string; email: string | null; role: Role; status: "active" | "suspended"; joinedAt: string; lastActiveAt: string | null; teams: { id: string; name: string }[]; title: string | null; avatar: string | null };
 export type Invitation = { id: string; email: string; role: "member" | "admin"; expiresAt: string; expired: boolean; invitedBy: string };
 type Props = {
   slug: string;
@@ -110,13 +110,13 @@ export function MembersScreen({ slug, locale, title, lead, orgName, me, members,
             <TableRow key={m.userId}>
               <TableCell>
                 <div className="flex min-w-0 items-center gap-3">
-                  <Avatar name={m.name} size="md" />
+                  <Avatar name={m.name} src={m.avatar ?? undefined} size="md" />
                   <div className="grid min-w-0">
                     <span className="truncate font-medium text-emphasis">
                       {m.name}
                       {m.userId === me.userId && <span className="font-normal text-subtle"> · {t("common.you")}</span>}
                     </span>
-                    {m.email && <span className="truncate text-xs text-subtle">{m.email}</span>}
+                    {(m.title || m.email) && <span className="truncate text-xs text-subtle">{[m.title, m.email].filter(Boolean).join(" · ")}</span>}
                   </div>
                 </div>
               </TableCell>

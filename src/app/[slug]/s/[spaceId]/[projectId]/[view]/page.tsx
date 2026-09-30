@@ -43,14 +43,14 @@ export default async function ProjectPage({ params, searchParams }: Props) {
     notFound();
   }
   if (project.spaceId !== spaceId) redirect(`/${slug}/s/${project.spaceId}/${projectId}/${view}`);
-  const today = todayIn(page.org.timezone);
+  const today = todayIn(page.tz);
   const [data, space, locale, header, kpis, members] = await Promise.all([
     projectBoard(page.ctx, projectId, papan, decision.level),
     repo.space(getDb(), page.ctx.organizationId, spaceId),
     getLocale(),
     projectHeader(page.ctx, project),
     view === "ringkasan" ? projectKpis(page.ctx, projectId, today) : undefined,
-    view === "anggota" ? projectMembers(page.ctx, project, today, page.org.timezone) : undefined,
+    view === "anggota" ? projectMembers(page.ctx, project, today, page.tz) : undefined,
   ]);
   return (
     <ProjectScreen

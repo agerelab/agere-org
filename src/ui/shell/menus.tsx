@@ -4,7 +4,7 @@
 // the account menu on the rail.
 import * as React from "react";
 import Link from "next/link";
-import { Check, LogOut, Plus } from "lucide-react";
+import { Check, Keyboard, LogOut, Plus, UserCog } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -61,7 +61,7 @@ export function OrgSwitcher({ org, orgs, unreadOrgs, t, children }: { org: Org; 
   );
 }
 
-export function AccountMenu({ user, t, children }: { user: { name: string; email: string }; t: T; children: React.ReactNode }) {
+export function AccountMenu({ user, t, children, onShortcuts }: { user: { name: string; email: string }; t: T; children: React.ReactNode; onShortcuts: () => void }) {
   const formRef = React.useRef<HTMLFormElement>(null);
   return (
     <>
@@ -74,6 +74,19 @@ export function AccountMenu({ user, t, children }: { user: { name: string; email
             <span className="truncate">{user.name}</span>
             <span className="truncate text-xs font-normal text-subtle">{user.email}</span>
           </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {/* PRD-12 §5.1: the only way into personal settings. */}
+          <DropdownMenuItem asChild>
+            <Link href="/pengaturan/profil" className="flex items-center gap-2">
+              <UserCog aria-hidden className="size-4" />
+              {t("settings.menu")}
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={onShortcuts} className="flex items-center gap-2">
+            <Keyboard aria-hidden className="size-4" />
+            <span className="flex-1">{t("shortcuts.title")}</span>
+            <kbd className="text-xs text-subtle">Ctrl /</kbd>
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => formRef.current?.requestSubmit()} className="flex items-center gap-2">
             <LogOut aria-hidden className="size-4" />

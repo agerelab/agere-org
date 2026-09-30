@@ -20,11 +20,10 @@ import { LOCALES, translator, type Locale, type MessageKey } from "@/i18n";
 import { slugify } from "@/modules/org/slug";
 import { PRESET_CONTENT, PRESETS, type Preset } from "@/modules/space/preset-content";
 import { initials } from "@/ui/space/icons";
+import { TIMEZONES } from "@/lib/timezones";
 import { LanguageSwitcher } from "../../language-switcher";
 import { checkOrgStepAction, checkSlugAction, finishOnboardingAction, type OrgFieldErrors } from "../org-actions";
 
-/** Indonesian zones first; the server accepts any IANA name. */
-export const TIMEZONES = ["Asia/Jakarta", "Asia/Makassar", "Asia/Jayapura", "Asia/Singapore", "Asia/Kuala_Lumpur", "Asia/Bangkok", "Asia/Manila", "Asia/Tokyo", "Australia/Sydney", "Europe/London", "America/New_York", "UTC"];
 const STEPS: MessageKey[] = ["onboarding.step.org", "onboarding.step.preset", "onboarding.step.invite"];
 
 type Done = { slug: string; name: string; invited: string[] };

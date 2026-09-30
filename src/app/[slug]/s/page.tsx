@@ -15,7 +15,7 @@ export const generateMetadata = ({ params }: Props) => pageTitle(params, "nav.sp
 export default async function SpaceHome({ params }: Props) {
   const { slug } = await params;
   const page = await requireOrg(slug);
-  const [tree, locale, t] = await Promise.all([spaceTree(page.ctx, todayIn(page.org.timezone)), getLocale(), getTranslator()]);
+  const [tree, locale, t] = await Promise.all([spaceTree(page.ctx, todayIn(page.tz)), getLocale(), getTranslator()]);
   if (tree === "NO_APP_ACCESS") return <NoSpaceAccess slug={slug} t={t} />;
   const last = (await cookies()).get(`agere-space-${page.org.id}`)?.value;
   const target = tree.find((s) => s.id === last) ?? tree[0];

@@ -12,5 +12,5 @@ export default async function TrashPage({ params }: Props) {
   const { slug } = await params;
   const page = await requireOrg(slug);
   const [items, locale, t] = await Promise.all([trashList(page.ctx), getLocale(), getTranslator()]);
-  return <TrashScreen slug={slug} locale={locale} title={t("nav.trash")} items={items} timezone={page.org.timezone} />;
+  return <TrashScreen slug={slug} locale={locale} title={t("nav.trash")} items={items} timezone={page.tz} />;
 }

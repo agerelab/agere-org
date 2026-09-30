@@ -9,7 +9,9 @@ import { listMyOrganizations, rememberOrganization, resolveOrg, type OrgSummary 
 export type OrgPage = {
   ctx: RequestContext;
   org: { id: string; slug: string; name: string; timezone: string; defaultLocale: "en" | "id"; createdBy: string; createdAt: Date };
-  user: { id: string; name: string; email: string };
+  user: { id: string; name: string; email: string; avatarUpdatedAt: Date | null };
+  /** PRD-12 §5.2: the viewer's timezone, else the organization's. "Today" everywhere uses this. */
+  tz: string;
   orgs: OrgSummary[];
 };
 
@@ -28,7 +30,8 @@ export const requireOrg = cache(async (slug: string): Promise<OrgPage> => {
   return {
     ctx: { requestId: crypto.randomUUID(), userId: user.id, organizationId: r.org.id, role: r.role },
     org: { id: r.org.id, slug: r.org.slug, name: r.org.name, timezone: r.org.timezone, defaultLocale: r.org.defaultLocale, createdBy: r.org.createdBy, createdAt: r.org.createdAt },
-    user: { id: user.id, name: user.name, email: user.email },
+    user: { id: user.id, name: user.name, email: user.email, avatarUpdatedAt: user.avatarUpdatedAt },
+    tz: user.timezone ?? r.org.timezone,
     orgs: await listMyOrganizations(user.id),
   };
 });
