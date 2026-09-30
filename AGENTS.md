@@ -23,7 +23,7 @@ PRD-00 only. PRD changes go through a PR to `docs/` with a decision number (D-xx
 | Persona | Works on | Must |
 |---|---|---|
 | `@be` | `src/modules/*` (domain, repository, actions, loaders, events), `src/contracts/`, `db/migrations/` | Follow `.agents/rules/architecture.md` and `security.md`; locked-lane tests approved by a person first |
-| `@fe` | `src/app/`, `src/ui/`, `src/i18n/` | Follow `.agents/rules/ui.md` and `i18n.md`; five states per screen; build against fakes |
+| `@fe` | `src/app/`, `src/ui/`, `src/i18n/` (DS: `src/components/`, read-only) | Follow `.agents/rules/ui.md` and `i18n.md`; five states per screen; build against fakes |
 | `@qa` | `tests/` | Generate tests from AC before implementation; tenancy matrix for every loader and action |
 | `@copy` | `src/i18n/*.json` | English is the source, Bahasa Indonesia the translation; sentence case, verb + object |
 
@@ -37,8 +37,8 @@ PRD-00 only. PRD changes go through a PR to `docs/` with a decision number (D-xx
 4. **Mutation + event + audit in one transaction** (`events.publish(tx, …)`, PRD-00b).
 5. **No raw SQL outside a module repository or `src/db`** (enforced by ESLint).
 6. **No UI string in components**: everything through `t()`, keys in `en.json` and `id.json`.
-7. **Only Agere DS components and tokens**; one default button per screen; no placeholder text in
-   authoring fields (D33).
+7. **Only Agere DS components and tokens** (vendored DS 6.4.0 in `src/components/`, never edited
+   here); one default button per screen; no placeholder text in authoring fields (D33).
 8. **Locked lanes** (`.agents/rules/lanes.md`): do not write or change their tests yourself.
 9. Slices are at most one ideal day; a PR over 400 changed lines is rejected unless it is a
    migration or generated.

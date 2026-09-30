@@ -1,0 +1,112 @@
+"use client";
+
+import * as React from "react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { DayButton, DayPicker, getDefaultClassNames } from "react-day-picker";
+
+import { cn } from "@/lib/utils";
+import { Button, buttonVariants } from "./button";
+
+/**
+ * Calendar — shadcn/ui date grid on react-day-picker 10 (single · multiple · range, dropdown captions,
+ * week numbers, disabled/hidden days, locales, time zones). This is the *date picker* calendar; the
+ * workspace month/week event calendar is `Calendar` from `@/components/agere-ds` (see DateCalendar note).
+ * Keyboard (built in): ←/→/↑/↓ day/week · PageUp/PageDown month · Shift+Page year · Home/End week edges.
+ */
+export type CalendarProps = React.ComponentProps<typeof DayPicker> & {
+  buttonVariant?: React.ComponentProps<typeof Button>["variant"];
+};
+
+export function Calendar({
+  className, classNames, showOutsideDays = true, captionLayout = "label", buttonVariant = "ghost", formatters, components, ...props
+}: CalendarProps) {
+  const d = getDefaultClassNames();
+  return (
+    <DayPicker
+      showOutsideDays={showOutsideDays}
+      className={cn(
+        "group/calendar bg-background p-3 [--cell-size:2rem] [[data-slot=card-content]_&]:bg-transparent [[data-slot=popover-content]_&]:bg-transparent",
+        className
+      )}
+      captionLayout={captionLayout}
+      formatters={{ formatMonthDropdown: (date) => date.toLocaleString("default", { month: "short" }), ...formatters }}
+      classNames={{
+        root: cn("w-fit", d.root),
+        months: cn("relative flex flex-col gap-4 md:flex-row", d.months),
+        month: cn("flex w-full flex-col gap-4", d.month),
+        nav: cn("absolute inset-x-0 top-0 flex w-full items-center justify-between gap-1", d.nav),
+        button_previous: cn(buttonVariants({ variant: buttonVariant }), "size-[--cell-size] select-none p-0 aria-disabled:opacity-50", d.button_previous),
+        button_next: cn(buttonVariants({ variant: buttonVariant }), "size-[--cell-size] select-none p-0 aria-disabled:opacity-50", d.button_next),
+        month_caption: cn("flex h-[--cell-size] w-full items-center justify-center px-[--cell-size]", d.month_caption),
+        dropdowns: cn("flex h-[--cell-size] w-full items-center justify-center gap-1.5 text-sm font-medium", d.dropdowns),
+        dropdown_root: cn("relative rounded-md border border-input shadow-xs has-[:focus]:border-ring has-[:focus]:shadow-[0_0_0_3px_hsl(var(--ring)/0.5)]", d.dropdown_root),
+        dropdown: cn("absolute inset-0 bg-popover opacity-0", d.dropdown),
+        caption_label: cn(
+          "select-none font-medium",
+          captionLayout === "label" ? "text-sm" : "flex h-8 items-center gap-1 rounded-md pl-2 pr-1 text-sm [&>svg]:size-3.5 [&>svg]:text-muted-foreground",
+          d.caption_label
+        ),
+        month_grid: "w-full border-collapse",
+        weekdays: cn("flex", d.weekdays),
+        weekday: cn("flex-1 select-none rounded-md text-[0.8rem] font-normal text-muted-foreground", d.weekday),
+        week: cn("mt-2 flex w-full", d.week),
+        week_number_header: cn("w-[--cell-size] select-none", d.week_number_header),
+        week_number: cn("select-none text-[0.8rem] text-muted-foreground", d.week_number),
+        day: cn(
+          "group/day relative aspect-square h-full w-full select-none p-0 text-center [&:first-child[data-selected=true]_button]:rounded-l-md [&:last-child[data-selected=true]_button]:rounded-r-md",
+          d.day
+        ),
+        range_start: cn("rounded-l-md bg-accent", d.range_start),
+        range_middle: cn("rounded-none", d.range_middle),
+        range_end: cn("rounded-r-md bg-accent", d.range_end),
+        today: cn("rounded-md bg-accent text-accent-foreground data-[selected=true]:rounded-none", d.today),
+        outside: cn("text-muted-foreground aria-selected:text-muted-foreground", d.outside),
+        disabled: cn("text-muted-foreground opacity-50", d.disabled),
+        hidden: cn("invisible", d.hidden),
+        ...classNames,
+      }}
+      components={{
+        Root: ({ className, rootRef, ...p }) => <div data-slot="calendar" ref={rootRef} className={cn(className)} {...p} />,
+        Chevron: ({ className, orientation, ...p }) =>
+          orientation === "left" ? <ChevronLeft className={cn("size-4", className)} {...p} />
+          : orientation === "right" ? <ChevronRight className={cn("size-4", className)} {...p} />
+          : <ChevronDown className={cn("size-4", className)} {...p} />,
+        DayButton: CalendarDayButton,
+        WeekNumber: ({ children, ...p }) => (
+          <td {...p}><div className="flex size-[--cell-size] items-center justify-center text-center">{children}</div></td>
+        ),
+        ...components,
+      }}
+      {...props}
+    />
+  );
+}
+
+export function CalendarDayButton({ className, day, modifiers, ...props }: React.ComponentProps<typeof DayButton>) {
+  const d = getDefaultClassNames();
+  const ref = React.useRef<HTMLButtonElement>(null);
+  React.useEffect(() => { if (modifiers.focused) ref.current?.focus(); }, [modifiers.focused]);
+  return (
+    <Button
+      ref={ref}
+      variant="ghost"
+      size="icon"
+      data-day={day.date.toLocaleDateString()}
+      data-selected-single={modifiers.selected && !modifiers.range_start && !modifiers.range_end && !modifiers.range_middle}
+      data-range-start={modifiers.range_start}
+      data-range-end={modifiers.range_end}
+      data-range-middle={modifiers.range_middle}
+      className={cn(
+        "flex aspect-square h-auto w-full min-w-[--cell-size] flex-col gap-1 font-normal leading-none [&>span]:text-xs [&>span]:opacity-70",
+        "data-[selected-single=true]:bg-primary data-[selected-single=true]:text-primary-foreground",
+        "data-[range-middle=true]:rounded-none data-[range-middle=true]:bg-accent data-[range-middle=true]:text-accent-foreground",
+        "data-[range-start=true]:rounded-md data-[range-start=true]:bg-primary data-[range-start=true]:text-primary-foreground",
+        "data-[range-end=true]:rounded-md data-[range-end=true]:bg-primary data-[range-end=true]:text-primary-foreground",
+        "group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10",
+        d.day,
+        className
+      )}
+      {...props}
+    />
+  );
+}
