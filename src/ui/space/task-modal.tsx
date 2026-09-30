@@ -3,7 +3,7 @@
 // Task detail modal, layout v2 (PRD-06 §8.1, D41): detail pane with properties and description,
 // sticky footer while there are unsaved changes, and an activity pane with comments.
 import * as React from "react";
-import { MoreHorizontal, SendHorizontal, Trash2 } from "lucide-react";
+import { MoreHorizontal, Trash2 } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button, IconButton } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -18,6 +18,7 @@ import { atLeast, type Level } from "@/modules/authz/levels";
 import { addCommentAction, deleteTaskAction, moveTaskAction, taskDetailAction, updateTaskAction } from "@/app/[slug]/s/actions";
 import type { BoardColumn } from "./board";
 import { AssigneeSelect, DueInput, PrioritySelect, StatusSelect, type AssigneeOption } from "./task-fields";
+import { CommentBody, CommentComposer } from "./comment-composer";
 
 type T = ReturnType<typeof translator>;
 type Detail = NonNullable<Awaited<ReturnType<typeof taskDetailAction>>>;
@@ -27,6 +28,7 @@ export function TaskModal({ t, locale, slug, taskId, projectName, assignees, onC
   const [detail, setDetail] = React.useState<Detail | null | "missing">(null);
   const [draft, setDraft] = React.useState<Draft | null>(null);
   const [comment, setComment] = React.useState("");
+  const people = React.useMemo(() => assignees.filter((a) => a.type === "user").map((a) => ({ id: a.id, name: a.name })), [assignees]);
   const [confirmClose, setConfirmClose] = React.useState(false);
   const [pending, start] = React.useTransition();
 
@@ -192,7 +194,9 @@ export function TaskModal({ t, locale, slug, taskId, projectName, assignees, onC
                       <p className="text-xs text-subtle">
                         <span className="font-medium text-emphasis">{c.author}</span> · {formatDateShort(locale, new Date(c.createdAt))} {formatTime(locale, new Date(c.createdAt))}
                       </p>
-                      <p className="whitespace-pre-wrap break-words text-sm">{c.body}</p>
+                      <p className="whitespace-pre-wrap break-words text-sm">
+                        <CommentBody body={c.body} people={people} />
+                      </p>
                     </div>
                   </li>
                 ))}
@@ -206,23 +210,7 @@ export function TaskModal({ t, locale, slug, taskId, projectName, assignees, onC
                   }}
                 >
                   <label htmlFor="f-comment" className="text-sm font-medium">{t("task.comment")}</label>
-                  <div className="flex items-end gap-2 rounded-md border border-control bg-default p-2">
-                    <textarea
-                      id="f-comment"
-                      rows={2}
-                      value={comment}
-                      aria-describedby="f-comment-hint"
-                      onChange={(e) => setComment(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          send();
-                        }
-                      }}
-                      className="min-h-10 flex-1 resize-none bg-transparent text-sm outline-none"
-                    />
-                    <IconButton type="submit" size="sm" variant="default" label={t("task.send")} icon={<SendHorizontal />} disabled={pending || !comment.trim()} />
-                  </div>
+                  <CommentComposer t={t} value={comment} onChange={setComment} onSend={send} people={people} pending={pending} />
                   <p id="f-comment-hint" className="text-xs text-subtle">{t("task.commentHint")}</p>
                 </form>
               )}
