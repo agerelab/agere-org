@@ -10,10 +10,10 @@ describe("shell navigation (UI-01 Navigasi ganda)", () => {
   });
 
   it("hides Owner/Admin-only Organisasi pages from members (PRD-02 §6.6)", () => {
-    expect(orgLinksFor("member").map((l) => l.path)).toEqual(["organisasi/anggota", "organisasi/tim", "organisasi/sampah"]);
+    expect(orgLinksFor("member").map((l) => l.path)).toEqual(["organisasi/umum", "organisasi/anggota", "organisasi/tim", "organisasi/sampah"]);
     expect(orgLinksFor("admin")).toHaveLength(7);
     expect(manageHome("owner")).toBe("organisasi/umum");
-    expect(manageHome("member")).toBe("organisasi/anggota");
+    expect(manageHome("member")).toBe("organisasi/umum");
   });
 
   it("names the current page for breadcrumbs and titles", () => {

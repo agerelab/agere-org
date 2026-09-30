@@ -16,12 +16,14 @@ knowledge, notifications and audit.
 
 ```bash
 npm install
-cp .env.example .env.local   # set DATABASE_URL
+cp .env.example .env.local   # optional locally: defaults to the embedded database
 npm run dev                  # http://localhost:3000
 ```
 
-With `NEXT_PUBLIC_FAKE_BACKEND=1` (the default in `.env.example`) the landing page opens the demo
-organization **Maju Jaya** at `/maju-jaya`. `DEV_ROLE=member` shows the app as a member.
+Locally the database is an embedded Postgres (PGlite) in `.data/`, created and migrated by
+`npm run dev`. For a ready account run `npm run db:seed` and sign in as `rina@maju.co.id` /
+`agere-demo-2026` (organization **Maju Jaya**). Or sign up: without an email provider, verification
+and reset links are printed in the terminal running `npm run dev`.
 
 | Command | What it does |
 |---|---|
@@ -30,7 +32,8 @@ organization **Maju Jaya** at `/maju-jaya`. `DEV_ROLE=member` shows the app as a
 | `npm run lint` | ESLint (incl. no raw SQL outside repositories) |
 | `npm test` | Vitest (unit, contract, i18n parity) |
 | `npm run build` | Production build |
-| `npm run db:migrate` | Apply `db/migrations/*.sql` (forward-only) |
+| `npm run db:migrate` | Apply `db/migrations/*.sql` (forward-only); runs before `npm run dev` |
+| `npm run db:seed` | Demo account and organization (local only) |
 
 ## Layout
 

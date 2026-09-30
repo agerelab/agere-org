@@ -14,16 +14,27 @@ import { SimpleTooltip } from "@/components/ui/tooltip";
 import { Logo } from "@/brand";
 import { cn } from "@/lib/utils";
 import { translator, type Locale } from "@/i18n";
-import type { ShellData } from "@/contracts/fakes/shell";
+import type { Role } from "@/lib/context";
+import { AccountMenu, OrgSwitcher } from "./menus";
 import { COOKIE, setPreferenceCookie } from "./cookies";
 import { DESK_LINKS, manageHome, orgLinksFor, pageKey, RAIL, sectionOf, type NavLink, type SectionId } from "./nav";
 
 const RAIL_ICON: Record<SectionId, React.ReactNode> = { desk: <Inbox />, space: <Layers />, manage: <Building2 /> };
 const LINK_ICON: Record<string, React.ReactNode> = { "desk/kotak-masuk": <Inbox />, "desk/tugas-saya": <ListChecks /> };
 
-type Props = ShellData & { locale: Locale; theme: "light" | "dark"; panelHidden: boolean; children: React.ReactNode };
+export type ShellOrg = { id: string; slug: string; name: string };
+type Props = {
+  org: ShellOrg;
+  user: { name: string; email: string };
+  role: Role;
+  orgs: (ShellOrg & { role: Role })[];
+  locale: Locale;
+  theme: "light" | "dark";
+  panelHidden: boolean;
+  children: React.ReactNode;
+};
 
-export function AppShell({ org, user, locale, theme: initialTheme, panelHidden, children }: Props) {
+export function AppShell({ org, user, role, orgs, locale, theme: initialTheme, panelHidden, children }: Props) {
   const t = translator(locale);
   const router = useRouter();
   const base = `/${org.slug}`;
@@ -120,17 +131,15 @@ export function AppShell({ org, user, locale, theme: initialTheme, panelHidden, 
         )}
       >
         <nav aria-label={t("shell.apps")} className="flex w-[68px] flex-none flex-col items-center gap-1 bg-muted py-3">
-          <SimpleTooltip side="right" content={org.name}>
-            <button type="button" aria-label={t("shell.switchOrg", org.name)} className="mb-3 grid size-10 place-items-center rounded-lg focus-ring">
-              <Logo variant="app-icon" height={40} title="" />
-            </button>
-          </SimpleTooltip>
+          <OrgSwitcher org={org} orgs={orgs} t={t}>
+            <Logo variant="app-icon" height={40} title="" />
+          </OrgSwitcher>
           {RAIL.map((r, i) => railLink(r.id, t(r.key), `${base}/${r.path}`, i))}
           <span className="flex-1" />
-          {railLink("manage", t("nav.manage"), `${base}/${manageHome(user.role)}`)}
-          <button type="button" aria-label={t("shell.account", user.name)} className="mt-2 rounded-full focus-ring">
+          {railLink("manage", t("nav.manage"), `${base}/${manageHome(role)}`)}
+          <AccountMenu user={user} t={t}>
             <Avatar name={user.name} size="md" className="bg-emphasis" />
-          </button>
+          </AccountMenu>
         </nav>
 
         <aside
@@ -145,7 +154,7 @@ export function AppShell({ org, user, locale, theme: initialTheme, panelHidden, 
             <IconButton className="md:hidden" size="sm" label={t("shell.closeMenu")} icon={<X />} onClick={() => setDrawer(false)} />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
-            <ContextPanel section={section} base={base} path={path} role={user.role} t={t} />
+            <ContextPanel section={section} base={base} path={path} role={role} t={t} />
           </div>
         </aside>
       </div>
@@ -178,7 +187,7 @@ export function AppShell({ org, user, locale, theme: initialTheme, panelHidden, 
   );
 }
 
-type PanelProps = { section: SectionId; base: string; path: string; role: ShellData["user"]["role"]; t: ReturnType<typeof translator> };
+type PanelProps = { section: SectionId; base: string; path: string; role: Role; t: ReturnType<typeof translator> };
 
 function ContextPanel({ section, base, path, role, t }: PanelProps) {
   const item = (l: NavLink) => (
