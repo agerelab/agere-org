@@ -1,9 +1,9 @@
 // Hourly notification jobs (PRD-10 §6): 90-day retention and the "Jatuh tempo hari ini" digest (Should)
-// at 08.00 in the organization's timezone (PRD-12 user timezones come later), one item per person,
-// organization and date.
+// at 08.00 in each person's timezone (PRD-12 §5.2: theirs, else the organization's), one item per
+// person, organization and date.
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { memberships, organizations } from "@/db/schema";
+import { memberships, organizations, users } from "@/db/schema";
 import type { Role } from "@/lib/context";
 import { todayIn } from "@/lib/dates";
 import { uuidv7 } from "@/lib/ids";
@@ -16,10 +16,15 @@ export async function dueTodayDigest(now = new Date(), hour = 8) {
   const db = getDb();
   let created = 0;
   for (const org of await db.select().from(organizations).where(eq(organizations.status, "active"))) {
-    if (hourIn(org.timezone, now) !== hour) continue;
-    const today = todayIn(org.timezone, now);
-    const members = await db.select().from(memberships).where(and(eq(memberships.organizationId, org.id), eq(memberships.status, "active")));
+    const members = await db
+      .select({ userId: memberships.userId, role: memberships.role, timezone: users.timezone })
+      .from(memberships)
+      .innerJoin(users, eq(users.id, memberships.userId))
+      .where(and(eq(memberships.organizationId, org.id), eq(memberships.status, "active")));
     for (const m of members) {
+      const tz = m.timezone ?? org.timezone;
+      if (hourIn(tz, now) !== hour) continue;
+      const today = todayIn(tz, now);
       const ctx = { requestId: "digest", organizationId: org.id, userId: m.userId, role: m.role as Role };
       const due = (await myTasks(ctx)).filter((x) => !x.done && x.dueDate === today);
       if (!due.length) continue;

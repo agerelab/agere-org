@@ -18,6 +18,8 @@ export async function memberRows(q: Q, orgId: string) {
       lastActiveAt: memberships.lastActiveAt,
       name: users.name,
       email: users.email,
+      title: users.title,
+      avatarUpdatedAt: users.avatarUpdatedAt,
     })
     .from(memberships)
     .innerJoin(users, eq(users.id, memberships.userId))

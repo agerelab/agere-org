@@ -15,6 +15,10 @@ export const users = pgTable("users", {
   theme: text("theme").$type<"light" | "dark" | "system">().notNull().default("light"),
   lastOrganizationId: uuid("last_organization_id"),
   status: text("status").$type<"active" | "deleted">().notNull().default("active"),
+  title: text("title"),
+  avatarUpdatedAt: ts("avatar_updated_at"),
+  deletedAt: ts("deleted_at"),
+  scrubbedAt: ts("scrubbed_at"),
   createdAt: ts("created_at").notNull().defaultNow(),
   updatedAt: ts("updated_at").notNull().defaultNow(),
 });
@@ -413,3 +417,12 @@ export const notificationEmails = pgTable(
   },
   (t) => [primaryKey({ columns: [t.dedupeKey, t.email] })],
 );
+
+// ---------- personal settings (PRD-12) ----------
+export const userAvatars = pgTable("user_avatars", {
+  userId: uuid("user_id").primaryKey(),
+  contentType: text("content_type").$type<"image/png" | "image/jpeg" | "image/webp">().notNull(),
+  bytes: bytea("bytes").notNull(),
+  size: integer("size").notNull(),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+});
