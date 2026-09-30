@@ -22,7 +22,7 @@ export default async function SpaceHome({ params }: Props) {
   if (target) redirect(`/${slug}/s/${target.id}`);
   return (
     <PageFrame title={t("nav.space")}>
-      <NoSpaces slug={slug} locale={locale} />
+      <NoSpaces slug={slug} orgId={page.org.id} locale={locale} />
     </PageFrame>
   );
 }

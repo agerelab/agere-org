@@ -3,7 +3,8 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Archive, ArchiveRestore, ChevronLeft, Lock, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, ChevronLeft, Flag, Link2, Lock, MoreHorizontal, Pencil, Plus, Share2, Star, Trash2, Users } from "lucide-react";
+import { AvatarGroup } from "@/components/ui/avatar";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, IconButton } from "@/components/ui/button";
@@ -19,13 +20,17 @@ import { cn } from "@/lib/utils";
 import type { ColumnCategory } from "@/db/schema";
 import { translator, type Locale, type MessageKey } from "@/i18n";
 import { atLeast } from "@/modules/authz/levels";
-import type { projectBoard } from "@/modules/space/queries";
+import type { MemberRow, ProjectHeader, ProjectKpis, projectBoard } from "@/modules/space/queries";
 import { Board, type BoardColumn, type BoardTask, type Move } from "@/ui/space/board";
 import { initials } from "@/ui/space/icons";
 import { TaskListView } from "@/ui/space/list";
 import { NewTaskDialog } from "@/ui/space/new-task-dialog";
 import { rememberView } from "@/ui/space/project-landing";
 import { TaskModal } from "@/ui/space/task-modal";
+import { ProjectMembers } from "@/ui/space/project-members";
+import { StatusChip, StatusDialog } from "@/ui/space/project-status";
+import { ProjectSummary } from "@/ui/space/project-summary";
+import { ShareDialog } from "@/ui/space/share-dialog";
 import {
   createBoardAction,
   createColumnAction,
@@ -35,11 +40,31 @@ import {
   moveTaskAction,
   renameColumnAction,
   setArchivedAction,
+  setFavoriteAction,
+  updateTaskAction,
 } from "../../../actions";
 
 type Data = Awaited<ReturnType<typeof projectBoard>>;
-type Props = { slug: string; locale: Locale; view: "daftar" | "papan"; spaceName: string; data: Data; override: boolean; today: string; openTask: string | null };
-type Dialogs = { kind: "task"; columnId?: string } | { kind: "board" } | { kind: "column" } | { kind: "rename"; column: BoardColumn } | { kind: "trash" } | null;
+export type ProjectView = "daftar" | "papan" | "ringkasan" | "anggota";
+type Props = {
+  slug: string;
+  orgName: string;
+  locale: Locale;
+  view: ProjectView;
+  spaceName: string;
+  data: Data;
+  header: ProjectHeader;
+  description: string;
+  kpis?: ProjectKpis;
+  members?: { rows: MemberRow[]; open: number; unassigned: number; overdue: number };
+  override: boolean;
+  today: string;
+  openTask: string | null;
+};
+type Dialogs = { kind: "task"; columnId?: string } | { kind: "board" } | { kind: "column" } | { kind: "rename"; column: BoardColumn } | { kind: "trash" } | { kind: "share" } | { kind: "status" } | null;
+const VIEWS: ProjectView[] = ["daftar", "papan", "ringkasan", "anggota"];
+// A tab opened with the keyboard keeps focus across the navigation (the page remounts).
+const FOCUS_TAB = "agere:focus-tab";
 
 /** Applies a move to the local list the way the server will (end or index within the target column). */
 function applyMove(tasks: BoardTask[], m: Move): BoardTask[] {
@@ -58,7 +83,7 @@ function applyMove(tasks: BoardTask[], m: Move): BoardTask[] {
   return [...rest.slice(0, at), updated, ...rest.slice(at)];
 }
 
-export function ProjectScreen({ slug, locale, view, spaceName, data, override, today, openTask }: Props) {
+export function ProjectScreen({ slug, orgName, locale, view, spaceName, data, header, description, kpis, members, override, today, openTask }: Props) {
   const t = translator(locale);
   const router = useRouter();
   const base = `/${slug}/s/${data.project.spaceId}/${data.project.id}`;
@@ -76,8 +101,55 @@ export function ProjectScreen({ slug, locale, view, spaceName, data, override, t
   const canManage = atLeast(data.level, "manage");
   const tasks = optimistic.filter((x) => assigneeFilter === "all" || (assigneeFilter === "none" ? !x.assignee : x.assignee?.id === assigneeFilter));
   const openCount = data.tasks.filter((x) => !x.done).length;
+  const [favorite, setFavorite] = React.useOptimistic(header.favorite);
+  const boardView = view === "daftar" || view === "papan";
 
   React.useEffect(() => rememberView(data.project.id, view), [data.project.id, view]);
+  React.useEffect(() => {
+    try {
+      if (sessionStorage.getItem(FOCUS_TAB) !== view) return;
+      sessionStorage.removeItem(FOCUS_TAB);
+    } catch {
+      return;
+    }
+    document.getElementById(`tab-${view}`)?.focus();
+  }, [view]);
+
+  const toggleFavorite = () =>
+    start(async () => {
+      setFavorite(!favorite);
+      const r = await setFavoriteAction(slug, data.project.id, !favorite);
+      if (!r.ok) toast.error(t(r.error));
+    });
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}${base}`);
+      toast.success(t("share.copied"));
+    } catch {
+      toast.error(t("share.copyFailed"));
+    }
+  };
+
+  const rename = async (task: BoardTask, title: string) => {
+    const r = await updateTaskAction(slug, task.id, task.version, { title });
+    if (!r.ok) toast.error(t(r.error), r.conflict ? { action: { label: t("project.reload"), onClick: () => router.refresh() } } : undefined);
+    return r.ok;
+  };
+
+  // ARIA tabs with automatic activation (US-10): ←/→ and Home/End move to and open the next view.
+  const onTabKey = (e: React.KeyboardEvent) => {
+    const i = VIEWS.indexOf(view);
+    const next = e.key === "ArrowRight" ? VIEWS[(i + 1) % VIEWS.length] : e.key === "ArrowLeft" ? VIEWS[(i - 1 + VIEWS.length) % VIEWS.length] : e.key === "Home" ? VIEWS[0] : e.key === "End" ? VIEWS.at(-1)! : null;
+    if (!next) return;
+    e.preventDefault();
+    document.getElementById(`tab-${next}`)?.focus();
+    try {
+      sessionStorage.setItem(FOCUS_TAB, next);
+    } catch {}
+    router.push(href(next));
+  };
+  const href = (v: ProjectView) => `${base}/${v}${data.boards.length > 1 && (v === "daftar" || v === "papan") ? `?papan=${data.board.id}` : ""}`;
 
   const openModal = (id: string | null) => {
     setTaskId(id);
@@ -103,15 +175,17 @@ export function ProjectScreen({ slug, locale, view, spaceName, data, override, t
     return r.ok;
   };
 
-  const tab = (v: "daftar" | "papan", label: string) => (
+  const tab = (v: ProjectView, label: string, count?: number) => (
     <Link
-      href={`${base}/${v}${data.boards.length > 1 ? `?papan=${data.board.id}` : ""}`}
+      id={`tab-${v}`}
+      href={href(v)}
       role="tab"
       aria-selected={view === v}
+      tabIndex={view === v ? 0 : -1}
       className={cn("inline-flex h-10 items-center gap-1.5 border-b-2 px-1 text-sm font-medium focus-ring", view === v ? "border-foreground text-emphasis" : "border-transparent text-subtle hover:text-emphasis")}
     >
       {label}
-      <span className="rounded-full bg-subtle px-1.5 text-xs tabular-nums text-subtle">{openCount}</span>
+      {count !== undefined && <span className="rounded-full bg-subtle px-1.5 text-xs tabular-nums text-subtle">{count}</span>}
     </Link>
   );
 
@@ -186,29 +260,52 @@ export function ProjectScreen({ slug, locale, view, spaceName, data, override, t
           <PageHeaderTitle
             badges={
               <>
-                {data.project.restricted && <Badge variant="secondary" startIcon={<Lock />}>{t("space.restricted")}</Badge>}
+                <IconButton
+                  size="xs"
+                  variant="ghost"
+                  label={t(favorite ? "favorite.remove" : "favorite.add", data.project.name)}
+                  aria-pressed={favorite}
+                  icon={<Star className={cn(favorite && "fill-current text-attention-on-surface")} />}
+                  onClick={toggleFavorite}
+                />
+                <StatusChip t={t} locale={locale} status={header.status} targetDate={header.targetDate} onClick={canManage ? () => setDialog({ kind: "status" }) : undefined} />
+                {header.access === "restricted" ? (
+                  <Badge variant="secondary" startIcon={<Lock />} title={t("project.accessRestrictedHint")}>{t("space.restricted")}</Badge>
+                ) : (
+                  <Badge variant="outline" startIcon={<Users />} title={t(header.access === "everyone" ? "project.accessEveryoneHint" : "project.accessSpaceHint")}>
+                    {t(header.access === "everyone" ? "space.everyone" : "project.followsSpace")}
+                  </Badge>
+                )}
                 {override && <Badge variant="attention">{t("project.adminAccess")}</Badge>}
               </>
             }
           >
             {data.project.name}
           </PageHeaderTitle>
-          {data.project.description && <PageHeaderDescription>{data.project.description}</PageHeaderDescription>}
+          {description && <PageHeaderDescription>{description}</PageHeaderDescription>}
         </PageHeaderContent>
         <PageHeaderActions
+          leading={
+            <button type="button" onClick={() => setDialog({ kind: "share" })} aria-label={t("share.peopleCount", String(header.people.length))} className="rounded-full focus-ring">
+              <AvatarGroup aria-hidden people={header.people} max={4} size="sm" />
+            </button>
+          }
+          secondary={[{ label: t("share.button"), icon: <Share2 />, onSelect: () => setDialog({ kind: "share" }) }]}
           primary={canEdit ? { label: t("task.new"), icon: <Plus />, onSelect: () => setDialog({ kind: "task" }) } : undefined}
           menuLabel={t("people.actions", data.project.name)}
-          menu={
-            canManage
+          menu={[
+            ...(canManage ? [{ label: t("status.title"), icon: <Flag />, onSelect: () => setDialog({ kind: "status" }) }] : []),
+            { label: t("project.copyLink"), icon: <Link2 />, onSelect: copyLink },
+            ...(canManage
               ? [
+                  "separator" as const,
                   data.project.archived
                     ? { label: t("project.restore"), icon: <ArchiveRestore />, onSelect: () => start(async () => void (await setArchivedAction(slug, data.project.id, false))) }
                     : { label: t("project.archive"), icon: <Archive />, onSelect: () => start(async () => void (await setArchivedAction(slug, data.project.id, true))) },
-                  "separator",
                   { label: t("project.trash"), icon: <Trash2 />, destructive: true, onSelect: () => setDialog({ kind: "trash" }) },
                 ]
-              : undefined
-          }
+              : []),
+          ]}
         />
       </PageHeader>
 
@@ -219,11 +316,19 @@ export function ProjectScreen({ slug, locale, view, spaceName, data, override, t
       )}
       {!data.project.archived && !atLeast(data.level, "edit") && <Alert variant="info">{t("project.viewOnly")}</Alert>}
 
-      <div role="tablist" aria-label={data.project.name} className="flex items-center gap-5 border-b border-default">
-        {tab("daftar", t("project.tab.list"))}
-        {tab("papan", t("project.tab.board"))}
+      <div role="tablist" aria-label={data.project.name} onKeyDown={onTabKey} className="flex items-center gap-5 overflow-x-auto border-b border-default">
+        {tab("daftar", t("project.tab.list"), openCount)}
+        {tab("papan", t("project.tab.board"), openCount)}
+        {tab("ringkasan", t("project.tab.summary"))}
+        {tab("anggota", t("project.tab.members"), header.people.length)}
       </div>
 
+      {view === "ringkasan" && kpis && (
+        <ProjectSummary t={t} locale={locale} description={description} header={header} kpis={kpis} onStatus={canManage ? () => setDialog({ kind: "status" }) : undefined} onShare={() => setDialog({ kind: "share" })} />
+      )}
+      {view === "anggota" && members && <ProjectMembers t={t} locale={locale} data={members} />}
+
+      {boardView && (
       <div className="flex flex-wrap items-center gap-2">
         {data.boards.map((b) => (
           <Link
@@ -248,6 +353,8 @@ export function ProjectScreen({ slug, locale, view, spaceName, data, override, t
         </div>
       </div>
 
+      )}
+
       {view === "papan" ? (
         <Board
           t={t}
@@ -269,9 +376,9 @@ export function ProjectScreen({ slug, locale, view, spaceName, data, override, t
             ) : undefined
           }
         />
-      ) : (
-        <TaskListView t={t} locale={locale} today={today} columns={data.columns} tasks={tasks} readOnly={!canEdit} onOpen={openModal} onQuickAdd={quickAdd} />
-      )}
+      ) : view === "daftar" ? (
+        <TaskListView t={t} slug={slug} locale={locale} today={today} columns={data.columns} tasks={tasks} assignees={data.assignees} readOnly={!canEdit} onOpen={openModal} onQuickAdd={quickAdd} onRename={rename} />
+      ) : null}
 
       {dialog?.kind === "task" && (
         <NewTaskDialog t={t} slug={slug} projectId={data.project.id} boardId={data.board.id} columns={data.columns} assignees={data.assignees} columnId={dialog.columnId} onClose={() => setDialog(null)} />
@@ -322,6 +429,26 @@ export function ProjectScreen({ slug, locale, view, spaceName, data, override, t
           })
         }
       />
+      {dialog?.kind === "share" && (
+        <ShareDialog
+          t={t}
+          slug={slug}
+          orgName={orgName}
+          target={{ kind: "project", id: data.project.id }}
+          subtitle={t("share.subtitleView", data.project.name, t(`project.tab.${view === "daftar" ? "list" : view === "papan" ? "board" : view === "ringkasan" ? "summary" : "members"}`))}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.kind === "status" && (
+        <StatusDialog
+          t={t}
+          slug={slug}
+          projectId={data.project.id}
+          initial={{ status: header.status, targetDate: header.targetDate, note: header.statusNote ?? "", ownerUserId: header.owner?.id ?? null }}
+          people={data.assignees.filter((a) => a.type === "user").map((a) => ({ id: a.id, name: a.name }))}
+          onClose={() => setDialog(null)}
+        />
+      )}
       {taskId && <TaskModal t={t} locale={locale} slug={slug} taskId={taskId} projectName={data.project.name} assignees={data.assignees} onClose={() => openModal(null)} />}
     </div>
   );

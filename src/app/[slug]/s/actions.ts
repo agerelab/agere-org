@@ -9,6 +9,9 @@ import { requireOrg } from "@/modules/org/web";
 import * as spaces from "@/modules/space/spaces";
 import * as projects from "@/modules/space/projects";
 import * as tasks from "@/modules/space/tasks";
+import * as sharing from "@/modules/space/sharing";
+import * as trash from "@/modules/space/trash";
+import * as assets from "@/modules/space/assets";
 import { taskDetail } from "@/modules/space/queries";
 import { checkProject } from "@/modules/space/access";
 import * as repo from "@/modules/space/repository";
@@ -178,4 +181,76 @@ export async function taskDetailAction(slug: string, taskId: string) {
   const decision = await checkProject(ctx, "view", project);
   if (!decision.allow) return null;
   return { ...d, level: decision.level, archived: !!project.archivedAt };
+}
+
+// ---------- M3b: Bagikan, status, favorites, bulk, Sampah, icons ----------
+
+export async function shareInfoAction(slug: string, target: sharing.ShareTarget): Promise<SpaceResult<{ info: sharing.ShareInfo }>> {
+  const { ctx } = await requireOrg(slug);
+  const r = await sharing.shareInfo(ctx, target);
+  if (!r.ok) return fail(r.code);
+  return { ok: true, info: r.info };
+}
+
+export async function saveSharingAction(slug: string, target: sharing.ShareTarget, input: sharing.ShareInput & { followSpace?: boolean }): Promise<SpaceResult> {
+  const { ctx } = await requireOrg(slug);
+  const r = await sharing.saveSharing(ctx, target, input);
+  if (!r.ok) return r.code === "NO_MANAGER" ? { ok: false, error: "share.lastManager" } : r.code === "INVALID" && input.everyone ? { ok: false, error: "share.projectNarrower" } : fail(r.code);
+  await after(slug, r.eventIds);
+  return { ok: true, message: "share.saved" };
+}
+
+export async function setStatusAction(slug: string, projectId: string, input: projects.StatusInput): Promise<SpaceResult> {
+  const { ctx } = await requireOrg(slug);
+  const r = await projects.setProjectStatus(ctx, projectId, input);
+  if (!r.ok) return r.code === "OWNER_NO_ACCESS" ? { ok: false, error: "status.ownerNoAccess" } : fail(r.code);
+  await after(slug, r.eventIds);
+  return { ok: true, message: "status.saved" };
+}
+
+export async function setFavoriteAction(slug: string, projectId: string, on: boolean): Promise<SpaceResult> {
+  const { ctx } = await requireOrg(slug);
+  const r = await projects.setFavorite(ctx, projectId, on);
+  if (!r.ok) return fail(r.code);
+  revalidatePath(`/${slug}`, "layout");
+  return { ok: true };
+}
+
+export async function completeTasksAction(slug: string, ids: string[]): Promise<SpaceResult<{ done: number; skipped: number }>> {
+  const { ctx } = await requireOrg(slug);
+  const r = await tasks.completeTasks(ctx, ids);
+  if (!r.ok) return fail(r.code);
+  await after(slug, r.eventIds);
+  return { ok: true, done: r.done, skipped: r.skipped };
+}
+
+export async function assignTasksAction(slug: string, ids: string[], assignee: tasks.Assignee): Promise<SpaceResult<{ done: number; skipped: number }>> {
+  const { ctx } = await requireOrg(slug);
+  const r = await tasks.assignTasks(ctx, ids, assignee);
+  if (!r.ok) return fail(r.code);
+  await after(slug, r.eventIds);
+  return { ok: true, done: r.done, skipped: r.skipped };
+}
+
+export async function restoreAction(slug: string, kind: trash.TrashKind, id: string): Promise<SpaceResult> {
+  const { ctx } = await requireOrg(slug);
+  const r = await trash.restore(ctx, kind, id);
+  if (!r.ok) {
+    if (r.code === "TAKEN") return { ok: false, error: "trash.nameTaken" };
+    if (r.code === "PARENT_DELETED") return { ok: false, error: "trash.parentDeleted" };
+    return fail(r.code);
+  }
+  await after(slug, r.eventIds);
+  return { ok: true, message: "trash.restored", args: [r.name] };
+}
+
+/** "Unggah ikon" (US-14): the file goes up on pick; the dialog saves the returned id with the space. */
+export async function uploadIconAction(slug: string, form: FormData): Promise<SpaceResult<{ id: string }>> {
+  const { ctx } = await requireOrg(slug);
+  const file = form.get("file");
+  if (!(file instanceof File)) return { ok: false, error: "icon.badType" };
+  if (file.size > assets.MAX_ICON_BYTES) return { ok: false, error: "icon.tooLarge" };
+  const r = await assets.uploadSpaceIcon(ctx, new Uint8Array(await file.arrayBuffer()));
+  if (!r.ok) return { ok: false, error: r.code === "TOO_LARGE" ? "icon.tooLarge" : r.code === "BAD_TYPE" ? "icon.badType" : "space.noAccess.title" };
+  return { ok: true, id: r.id };
 }

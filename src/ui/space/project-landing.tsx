@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 
-export const VIEWS = ["daftar", "papan"] as const;
+export const VIEWS = ["daftar", "papan", "ringkasan", "anggota"] as const;
 export type ProjectView = (typeof VIEWS)[number];
 const key = (projectId: string) => `agere:ptab:${projectId}`;
 

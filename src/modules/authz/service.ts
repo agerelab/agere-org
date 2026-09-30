@@ -75,6 +75,34 @@ export async function check(ctx: RequestContext, need: AclLevel, resource: { app
   }
 }
 
+/**
+ * Every active member who can open a resource, with the level and whether it comes only from the
+ * governance override (Owner/Admin without a grant). Loads app grants, ACL rows and team membership
+ * once; used by Bagikan and the project Members tab so both count the same people.
+ */
+export async function whoCanAccess(q: Q, organizationId: string, app: string, chain: repo.Container[]) {
+  const [enabled, members, grants, rows] = await Promise.all([
+    repo.appEnabled(q, organizationId, app),
+    repo.activeMembers(q, organizationId),
+    repo.grantsFor(q, organizationId, app),
+    repo.aclOfMany(q, organizationId, chain.map((c) => c.id)),
+  ]);
+  if (!enabled) return [];
+  const teamIds = [...new Set([...grants, ...rows].filter((g) => g.principalType === "team").map((g) => g.principalId))];
+  const teamRows = await repo.teamMemberRows(q, organizationId, teamIds);
+  const out: { userId: string; role: string; level: Level; override: boolean }[] = [];
+  for (const m of members) {
+    const ps: repo.Principal[] = [{ type: "user", id: m.userId }, ...teamRows.filter((t) => t.userId === m.userId).map((t) => ({ type: "team" as const, id: t.teamId })), { type: "org", id: organizationId }];
+    const admin = isAdminRole(m.role);
+    const hasApp = admin || grants.some((g) => ps.some((p) => p.type === g.principalType && p.id === g.principalId));
+    if (!hasApp) continue;
+    const level = levelFromRows(rows, ps, chain);
+    if (level !== "none") out.push({ userId: m.userId, role: m.role, level, override: false });
+    else if (admin) out.push({ userId: m.userId, role: m.role, level: "manage", override: true });
+  }
+  return out;
+}
+
 // ---------- organization defaults ----------
 
 /** New organizations: Space enabled, and every member has it (the "Semua anggota" grant). */

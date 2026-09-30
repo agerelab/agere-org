@@ -1,7 +1,7 @@
 // Organization (PRD-02): creation, URL context, landing after sign-in.
-import { getDb } from "@/db/client";
+import { getDb, type Tx } from "@/db/client";
 import { uuidv7 } from "@/lib/ids";
-import type { Role } from "@/lib/context";
+import type { RequestContext, Role } from "@/lib/context";
 import { publish } from "@/modules/events";
 import { setupOrganizationApps } from "@/modules/authz/service";
 import { setLastOrganization } from "@/modules/identity/repository";
@@ -40,7 +40,12 @@ export async function slugAvailable(slug: string): Promise<boolean> {
 }
 
 /** US-1: the creator becomes Owner; org.organization.created is audited in the same transaction. */
-export async function createOrganization(userId: string, input: CreateInput, requestId?: string): Promise<CreateResult> {
+/**
+ * `seed` runs inside the creating transaction with the new Owner's context, so the Titik mulai
+ * content (PRD-02 §6.3) exists exactly when the organization does. Supplied by the caller to keep
+ * this module free of app imports.
+ */
+export async function createOrganization(userId: string, input: CreateInput, requestId?: string, seed?: (tx: Tx, ctx: RequestContext) => Promise<string[]>): Promise<CreateResult> {
   const problem = slugProblem(input.slug);
   if (problem) return { ok: false, code: problem === "reserved" ? "SLUG_RESERVED" : "SLUG_INVALID" };
   const db = getDb();
@@ -49,7 +54,7 @@ export async function createOrganization(userId: string, input: CreateInput, req
 
   const id = uuidv7();
   try {
-    const eventId = await db.transaction(async (tx) => {
+    const eventIds = await db.transaction(async (tx) => {
       await repo.insertOrganization(tx, {
         id,
         slug: input.slug,
@@ -61,14 +66,16 @@ export async function createOrganization(userId: string, input: CreateInput, req
       await repo.insertMembership(tx, { organizationId: id, userId, role: "owner" });
       await setupOrganizationApps(tx, id, userId);
       await setLastOrganization(tx, userId, id);
-      return publish(
+      const created = await publish(
         tx,
         { scope: "organization", organizationId: id, actor: { type: "user", userId }, requestId },
         { type: "org.organization.created", subject: { module: "org", type: "organization", id }, data: { slug: input.slug, name: input.name.trim() } },
       );
+      const seeded = seed ? await seed(tx, { requestId: requestId ?? "create-org", organizationId: id, userId, role: "owner" }) : [];
+      return [created, ...seeded];
     });
     const org = (await repo.findBySlug(db, input.slug))!;
-    return { ok: true, org, eventIds: [eventId] };
+    return { ok: true, org, eventIds };
   } catch (e) {
     // Lost a race for the slug between the check and the insert.
     if (await repo.findBySlug(db, input.slug)) return { ok: false, code: "SLUG_TAKEN", suggestion: await suggestSlug(input.slug) };

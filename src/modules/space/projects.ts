@@ -7,14 +7,18 @@ import { translator, type Locale } from "@/i18n";
 import { publish } from "@/modules/events";
 import { upsertAclRow } from "@/modules/authz/repository";
 import type { ColumnCategory } from "@/db/schema";
-import { checkProject, checkSpace } from "./access";
+import { and, eq } from "drizzle-orm";
+import { memberships } from "@/db/schema";
+import { atLeast } from "@/modules/authz/levels";
+import { isAdminRole } from "@/modules/authz/matrix";
+import { checkProject, checkSpace, explicitLevel } from "./access";
 import * as repo from "./repository";
-import { denied, orgCtx, type Fail } from "./shared";
+import { denied, isDate, orgCtx, type Fail } from "./shared";
 
 export const LIMITS = { boardsPerProject: 20, columnsPerBoard: 20 };
 
 /** A new board has 3 columns (§6.1), named in the organization's default language. */
-async function insertBoardWithColumns(tx: Tx, organizationId: string, projectId: string, name: string, orderKey: string, locale: Locale) {
+export async function insertBoardWithColumns(tx: Tx, organizationId: string, projectId: string, name: string, orderKey: string, locale: Locale) {
   const t = translator(locale);
   const boardId = uuidv7();
   await repo.insertBoard(tx, { organizationId, id: boardId, projectId, name, orderKey });
@@ -97,10 +101,52 @@ export async function deleteProject(ctx: RequestContext, id: string): Promise<{ 
   const r = await requireProject(ctx, id, "manage");
   if (!r.ok) return r;
   const eventId = await getDb().transaction(async (tx) => {
-    await repo.updateProject(tx, ctx.organizationId, id, { deletedAt: new Date() });
+    await repo.updateProject(tx, ctx.organizationId, id, { deletedAt: new Date(), deletedBy: ctx.userId });
     return publish(tx, orgCtx(ctx), { type: "space.project.deleted", subject: { module: "space", type: "project", id, container: { type: "space", id: r.project.spaceId } }, data: { name: r.project.name } });
   });
   return { ok: true, spaceId: r.project.spaceId, eventIds: [eventId] };
+}
+
+export type ProjectStatus = "on_track" | "at_risk" | "off_track";
+export type StatusInput = { status: ProjectStatus | null; targetDate: string | null; note: string; ownerUserId: string | null };
+
+/**
+ * "Status proyek" (§6.8, US-11): manage only. The owner must be able to edit the project. Publishes
+ * space.project.updated with before/after.
+ */
+export async function setProjectStatus(ctx: RequestContext, id: string, input: StatusInput): Promise<{ ok: true; eventIds: string[] } | Fail<"INVALID" | "OWNER_NO_ACCESS" | "NOT_FOUND" | "FORBIDDEN" | "NO_APP_ACCESS">> {
+  if (input.status && !["on_track", "at_risk", "off_track"].includes(input.status)) return { ok: false, code: "INVALID" };
+  if (input.targetDate && !isDate(input.targetDate)) return { ok: false, code: "INVALID" };
+  if (input.note.length > 280) return { ok: false, code: "INVALID" };
+  const r = await requireProject(ctx, id, "manage");
+  if (!r.ok) return r;
+  const db = getDb();
+  if (input.ownerUserId && input.ownerUserId !== r.project.ownerUserId) {
+    const [m] = await db.select().from(memberships).where(and(eq(memberships.organizationId, ctx.organizationId), eq(memberships.userId, input.ownerUserId)));
+    const level = m?.status === "active" ? (isAdminRole(m.role) ? "manage" : await explicitLevel(db, ctx.organizationId, input.ownerUserId, r.project)) : "none";
+    if (!atLeast(level, "edit")) return { ok: false, code: "OWNER_NO_ACCESS" };
+  }
+  const p = r.project;
+  const statusChanged = input.status !== p.status || input.note.trim() !== (p.statusNote ?? "");
+  const eventId = await db.transaction(async (tx) => {
+    await repo.updateProject(tx, ctx.organizationId, id, {
+      status: input.status,
+      statusNote: input.note.trim() || null,
+      targetDate: input.targetDate,
+      ownerUserId: input.ownerUserId,
+      ...(statusChanged ? { statusUpdatedAt: new Date(), statusUpdatedBy: ctx.userId } : {}),
+    });
+    return publish(tx, orgCtx(ctx), {
+      type: "space.project.updated",
+      subject: { module: "space", type: "project", id, container: { type: "space", id: p.spaceId } },
+      // Not audited, so the change travels in data for consumers (§6.8: "with before/after status").
+      data: {
+        before: { status: p.status, target_date: p.targetDate, owner_user_id: p.ownerUserId },
+        after: { status: input.status, target_date: input.targetDate, owner_user_id: input.ownerUserId },
+      },
+    });
+  });
+  return { ok: true, eventIds: [eventId] };
 }
 
 export async function setFavorite(ctx: RequestContext, projectId: string, on: boolean): Promise<{ ok: true; eventIds: string[] } | Fail<"NOT_FOUND" | "FORBIDDEN" | "NO_APP_ACCESS">> {
@@ -142,7 +188,14 @@ export async function deleteBoard(ctx: RequestContext, boardId: string): Promise
   if (!r.ok) return r;
   if ((await repo.boardsOf(db, ctx.organizationId, b.projectId)).length <= 1) return { ok: false, code: "LAST_BOARD" };
   if ((await repo.tasksOfBoard(db, ctx.organizationId, boardId)).length) return { ok: false, code: "NOT_EMPTY" };
-  await repo.deleteBoard(db, ctx.organizationId, boardId);
+  const target = (await repo.boardsOf(db, ctx.organizationId, b.projectId)).find((x) => x.id !== boardId)!;
+  const targetCols = await repo.columnsOf(db, ctx.organizationId, target.id);
+  const to = targetCols.find((c) => c.category === "todo") ?? targetCols[0];
+  const cols = await repo.columnsOf(db, ctx.organizationId, boardId);
+  await db.transaction(async (tx) => {
+    await repo.rehomeTrashed(tx, ctx.organizationId, cols.map((c) => c.id), { boardId: target.id, columnId: to.id });
+    await repo.deleteBoard(tx, ctx.organizationId, boardId);
+  });
   return { ok: true, eventIds: [] };
 }
 
@@ -198,8 +251,13 @@ export async function deleteColumn(ctx: RequestContext, columnId: string): Promi
   const r = await requireProject(ctx, b.projectId, "edit");
   if (!r.ok) return r;
   if (await repo.tasksInColumn(db, ctx.organizationId, columnId)) return { ok: false, code: "NOT_EMPTY" };
-  if ((await repo.columnsOf(db, ctx.organizationId, c.boardId)).length <= 1) return { ok: false, code: "LAST_COLUMN" };
-  await repo.deleteColumn(db, ctx.organizationId, columnId);
+  const siblings = (await repo.columnsOf(db, ctx.organizationId, c.boardId)).filter((x) => x.id !== columnId);
+  if (!siblings.length) return { ok: false, code: "LAST_COLUMN" };
+  const to = siblings.find((x) => x.category === "todo") ?? siblings[0];
+  await db.transaction(async (tx) => {
+    await repo.rehomeTrashed(tx, ctx.organizationId, [columnId], { boardId: c.boardId, columnId: to.id });
+    await repo.deleteColumn(tx, ctx.organizationId, columnId);
+  });
   return { ok: true, eventIds: [] };
 }
 
